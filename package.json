@@ -1,0 +1,44 @@
+{
+  "name": "carbon-management-system-full",
+  "version": "1.0.0",
+  "description": "Carbon management system with separated frontend and backend",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run gulp",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run gulp build",
+    "start": "npm run start:backend",
+    "start:backend": "cd backend && npm start",
+    "start:frontend": "cd frontend && npm run gulp serve",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "clean": "npm run clean:backend && npm run clean:frontend",
+    "clean:backend": "cd backend && npm run clean",
+    "clean:frontend": "cd frontend && rimraf dist",
+    "db:push": "cd backend && npm run db:push",
+    "db:studio": "cd backend && npm run db:studio",
+    "test": "cd backend && npm test"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "rimraf": "^5.0.10"
+  },
+  "keywords": [
+    "carbon",
+    "management",
+    "fullstack",
+    "express",
+    "typescript",
+    "smartadmin",
+    "frontend",
+    "backend"
+  ],
+  "author": "",
+  "license": "MIT"
+}

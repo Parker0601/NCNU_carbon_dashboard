@@ -105,10 +105,4 @@ Thumbs.db
 # Frontend temporary files
 frontend/.sass-cache/
 frontend/tmp/
-frontend/temp/
-
-# --- allow gulp task files under frontend/build ---
-!frontend/build/
-!frontend/build/**/*.js
-!frontend/build/**/*.ts
-!frontend/build/**/*.json
+frontend/temp/ 

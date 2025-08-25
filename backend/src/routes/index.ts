@@ -1,14 +1,16 @@
 import { Router } from 'express';
-import authRoutes from './auth.routes';
-import carbonRoutes from './carbon.routes';
-import adminRoutes from './admin.routes';
+// import authRoutes from './auth.routes';
+// import carbonRoutes from './carbon.routes';
+// import adminRoutes from './admin.routes';
+import wasteRoutes from './waste.routes';
 
 const router = Router();
 
 // API routes
-router.use('/auth', authRoutes);
-router.use('/carbon', carbonRoutes);
-router.use('/admin', adminRoutes);
+// router.use('/auth', authRoutes);
+// router.use('/carbon', carbonRoutes);
+// router.use('/admin', adminRoutes);
+router.use('/waste', wasteRoutes);
 
 // Health check
 router.get('/health', (_req, res) => {

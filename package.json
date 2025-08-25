@@ -40,5 +40,8 @@
     "backend"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "pace-js": "^1.2.4"
+  }
 }

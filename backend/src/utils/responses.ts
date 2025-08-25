@@ -23,6 +23,9 @@ export const successResponse = <T>(
   return res.status(statusCode).json(response);
 };
 
+// 別名函數，保持向後相容性
+export const sendSuccess = successResponse;
+
 export const errorResponse = (
   res: Response,
   message: string = 'Error occurred',
@@ -65,4 +68,14 @@ export const forbiddenResponse = (
   message: string = 'Forbidden'
 ): Response<ApiResponse> => {
   return errorResponse(res, message, 403);
+};
+
+// 別名函數，保持向後相容性
+export const sendError = (
+  res: Response,
+  message: string = 'Error occurred',
+  error?: any,
+  statusCode: number = 500
+): Response<ApiResponse> => {
+  return errorResponse(res, message, statusCode, error?.message || error);
 }; 

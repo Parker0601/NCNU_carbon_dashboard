@@ -2,6 +2,10 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "commonjs",
+
+    "moduleResolution": "node16",          // ← 新增（或用 "node" 也可）
+    "types": ["node"],                      // ← 建議加，讓 Node 內建型別完整
+
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": "./src",
@@ -25,9 +29,12 @@
     "noUncheckedIndexedAccess": false,
     "allowUnusedLabels": false,
     "allowUnreachableCode": false,
+
     "baseUrl": "./src",
     "paths": {
+      "@": ["."],                          // ← 新增：root alias（不帶星號）
       "@/*": ["*"],
+      "@/config": ["config/index"],        // ← 新增：可選
       "@/config/*": ["config/*"],
       "@/db/*": ["db/*"],
       "@/routes/*": ["routes/*"],
@@ -39,12 +46,6 @@
       "@/types/*": ["types/*"]
     }
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "tests"
-  ]
-} 
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "tests"]
+}

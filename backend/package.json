@@ -2,6 +2,7 @@
   "name": "carbon-management-system",
   "version": "1.0.0",
   "description": "Carbon management and review system with frontend and backend",
+  "type": "module",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",

@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "commonjs",
+    "module": "ESNext",
 
-    "moduleResolution": "node16",          // ← 新增（或用 "node" 也可）
+    "moduleResolution": "bundler",          // ← 改為 bundler 以支援 tsx
     "types": ["node"],                      // ← 建議加，讓 Node 內建型別完整
 
     "lib": ["ES2022"],

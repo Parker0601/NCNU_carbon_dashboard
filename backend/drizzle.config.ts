@@ -1,7 +1,9 @@
 import { defineConfig } from 'drizzle-kit';
 import * as dotenv from 'dotenv';
+import path from 'path';
 
-dotenv.config();
+// 讀取根目錄的 .env 檔案
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 export default defineConfig({
   schema: './src/db/schema.ts',

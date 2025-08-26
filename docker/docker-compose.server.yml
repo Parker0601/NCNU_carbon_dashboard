@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # 本地 PostgreSQL 服務已移除，改為連接伺服器資料庫
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: carbon_management_db
+  #   environment:
+  #     POSTGRES_DB: carbon_management
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: password
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - carbon_network
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: carbon_management_api
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      # 使用伺服器資料庫連接
+      DATABASE_URL: postgresql://username:password@your-server-ip:5432/database_name
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      JWT_EXPIRES_IN: 7d
+      CORS_ORIGIN: http://localhost:3000
+    ports:
+      - "3000:3000"
+    # 移除 depends_on: postgres，因為不再依賴本地資料庫
+    # depends_on:
+    #   - postgres
+    networks:
+      - carbon_network
+    volumes:
+      - ../src:/app/src
+      - ../package.json:/app/package.json
+      - ../tsconfig.json:/app/tsconfig.json
+
+# 移除本地資料庫 volume
+# volumes:
+#   postgres_data:
+
+networks:
+  carbon_network:
+    driver: bridge 

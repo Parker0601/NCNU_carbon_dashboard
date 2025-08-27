@@ -6,6 +6,8 @@ import { z } from "zod";
 // 1) 載入 .env（預設放在 backend/.env）
 const envPath = fs.existsSync(path.resolve(process.cwd(), ".env"))
   ? path.resolve(process.cwd(), ".env")
+  : fs.existsSync(path.resolve(process.cwd(), "..", ".env"))
+  ? path.resolve(process.cwd(), "..", ".env")
   : undefined;
 dotenv.config(envPath ? { path: envPath } : undefined);
 
@@ -16,8 +18,8 @@ const EnvSchema = z.object({
   HOST: z.string().default("0.0.0.0"),
 
   // 可按需求增減（若暫時沒有，留空即可）
-  DATABASE_URL: z.string().min(1).optional(), // e.g. postgres://... 或 mysql://...
-  JWT_SECRET: z.string().min(1).optional(),
+  DATABASE_URL: z.string().min(1), // e.g. postgres://... 或 mysql://...
+  JWT_SECRET: z.string().min(1),
   JWT_EXPIRES_IN: z.string().default("7d"),
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])

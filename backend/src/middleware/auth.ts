@@ -21,6 +21,12 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
     return;
   }
 
+  // 檢查JWT_SECRET是否存在
+  if (!env.JWT_SECRET) {
+    unauthorizedResponse(res, 'JWT secret not configured');
+    return;
+  }
+
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
     req.user = decoded;

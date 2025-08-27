@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, desc, count } from 'drizzle-orm';
 import { db } from '@/db';
-import { devices, maintenance } from '@/db/schema';
+import { devices, maintenanceRecords } from '@/db/schema';
 import { successResponse, errorResponse, notFoundResponse } from '@/utils/responses';
 import { authenticateToken, requireUser } from '@/middleware/auth';
 
@@ -12,7 +12,7 @@ router.use(authenticateToken);
 router.use(requireUser);
 
 // Get all devices
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (_req: Request, res: Response) => {
   try {
     // 獲取所有設備
     const deviceList = await db
@@ -53,9 +53,9 @@ router.get('/:id/maintenance', async (req: Request, res: Response) => {
     
     const maintenanceHistory = await db
       .select()
-      .from(maintenance)
-      .where(eq(maintenance.deviceId, deviceId))
-      .orderBy(desc(maintenance.id));
+      .from(maintenanceRecords)
+      .where(eq(maintenanceRecords.issueId, deviceId))
+      .orderBy(desc(maintenanceRecords.id));
 
     return successResponse(res, maintenanceHistory, 'Maintenance history retrieved successfully');
   } catch (error) {
@@ -70,23 +70,22 @@ router.post('/maintenance', async (req: Request, res: Response) => {
       return errorResponse(res, 'User not authenticated', 401);
     }
 
-    const { deviceId, type, description, maintenanceTime } = req.body;
+    const { deviceId, description, endTime } = req.body;
 
     // 驗證必要欄位
-    if (!deviceId || !type || !description || !maintenanceTime) {
+    if (!deviceId || !description || !endTime) {
       return errorResponse(res, 'Missing required fields', 400);
     }
 
     // 創建維護記錄
     const [newMaintenance] = await db
-      .insert(maintenance)
+      .insert(maintenanceRecords)
       .values({
-        deviceId: parseInt(deviceId),
+        issueId: parseInt(deviceId),
         userId: req.user.id,
-        type,
         description,
-        maintenanceTime: new Date(maintenanceTime),
-        createdAt: new Date()
+        createTime: new Date(),
+        endTime: new Date(endTime)
       })
       .returning();
 
@@ -107,15 +106,18 @@ router.put('/:id/status', async (req: Request, res: Response) => {
     }
 
     const id = parseInt(req.params['id'] || '0');
-    const { status, runtime } = req.body;
+    const { status } = req.body;
+
+    // 驗證狀態值
+    if (!status || !['1', '2', '3'].includes(status)) {
+      return errorResponse(res, 'Invalid status value. Must be 1, 2, or 3', 400);
+    }
 
     // 更新設備狀態
     const [updatedDevice] = await db
       .update(devices)
       .set({
         status,
-        runtime: runtime || 0,
-        updatedAt: new Date()
       })
       .where(eq(devices.id, id))
       .returning();
@@ -134,17 +136,13 @@ router.put('/:id/status', async (req: Request, res: Response) => {
 });
 
 // Get maintenance statistics
-router.get('/maintenance/stats', async (req: Request, res: Response) => {
+router.get('/maintenance/stats', async (_req: Request, res: Response) => {
   try {
-    // 獲取維護統計數據
     const stats = await db
       .select({
-        totalMaintenance: db.fn.count(maintenance.id),
-        routineMaintenance: db.fn.count(maintenance.id).where(eq(maintenance.type, 'routine')),
-        repairMaintenance: db.fn.count(maintenance.id).where(eq(maintenance.type, 'repair')),
-        inspectionMaintenance: db.fn.count(maintenance.id).where(eq(maintenance.type, 'inspection'))
+        totalMaintenance: count(maintenanceRecords.id),
       })
-      .from(maintenance);
+      .from(maintenanceRecords);
 
     return successResponse(res, stats[0], 'Maintenance statistics retrieved successfully');
   } catch (error) {

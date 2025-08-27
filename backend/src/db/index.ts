@@ -3,6 +3,11 @@ import postgres from 'postgres';
 import { env } from '@/config/env';
 import * as schema from './schema';
 
+// 檢查數據庫URL是否存在
+if (!env.DATABASE_URL) {
+  throw new Error('DATABASE_URL environment variable is required');
+}
+
 // Create PostgreSQL connection
 const client = postgres(env.DATABASE_URL, {
   max: 10,

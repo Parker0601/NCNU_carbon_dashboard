@@ -155,55 +155,40 @@
 		});
 
 		// 登入按鈕處理
-		$("#js-login-btn").click(function(event) {
+		$("#js-login-btn").click(async function(event) {
 			event.preventDefault();
-			
+
 			// 取得表單資料
-			var username = $('#username').val();
-			var password = $('#password').val();
-			
+			const username = $('#username').val();
+			const password = $('#password').val();
+
 			// 表單驗證
-			var form = $("#js-login");
+			const form = $("#js-login");
 			form.addClass('was-validated');
-			
+
 			if (form[0].checkValidity() === false) {
 				return false;
 			}
-			
-			// 角色判斷與登入處理
-			let userRole = '';
-			let userName = '';
-			let redirectPage = '';
-			
-			if (username === 'B123' && password === '123') {
-				userRole = 'boss';
-				userName = '老闆';
-				redirectPage = 'boss_dashboard.html';
-			} else if (username === 'M123' && password === '123') {
-				userRole = 'manager';
-				userName = '主管';
-				redirectPage = 'manager_overview.html';
-			} else if (username === 'S123' && password === '123') {
-				userRole = 'staff';
-				userName = '員工';
-				redirectPage = 'staff_device.html';
-			} else {
-				$('#login-info').html('<strong>登入失敗!</strong> 使用者名稱或密碼錯誤').removeClass('alert-primary').addClass('alert-danger').show();
-				return false;
+
+			try {
+				// 呼叫後端登入 API
+				const response = await login({ email: username, password });
+
+				// 儲存 JWT Token
+				localStorage.setItem('token', response.token);
+				localStorage.setItem('user', JSON.stringify(response.user));
+
+				// 顯示登入成功資訊
+				$('#login-info').html('<strong>登入成功!</strong> 正在跳轉到主頁...').removeClass('alert-danger').addClass('alert-success').show();
+
+				// 延遲跳轉
+				setTimeout(function() {
+					window.location.href = 'dashboard.html';
+				}, 1000);
+			} catch (error) {
+				// 顯示錯誤資訊
+				$('#login-info').html('<strong>登入失敗!</strong> ' + (error.message || '請稍後再試')).removeClass('alert-success').addClass('alert-danger').show();
 			}
-			
-			// 儲存登入資訊
-			localStorage.setItem('currentRole', userRole);
-			localStorage.setItem('userName', userName);
-			localStorage.setItem('userID', username);
-			
-			// 顯示登入成功資訊
-			$('#login-info').html('<strong>登入成功!</strong> 正在跳轉到 ' + userName + ' 介面...').removeClass('alert-danger').addClass('alert-success').show();
-			
-			// 延遲跳轉
-			setTimeout(function() {
-				window.location.href = redirectPage;
-			}, 1000);
 		});
 	});
 </script>

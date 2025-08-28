@@ -702,5 +702,27 @@
 			}
 		});
 	});
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const user = JSON.parse(localStorage.getItem('user'));
+        const token = localStorage.getItem('token');
 
+        if (user && token) {
+            // 根據角色顯示對應的導航項目
+            document.querySelectorAll('.role-nav-item').forEach(item => {
+                const role = item.getAttribute('data-role');
+                if (role === user.role) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        } else {
+            // 如果未登入，隱藏所有角色相關的導航項目
+            document.querySelectorAll('.role-nav-item').forEach(item => {
+                item.style.display = 'none';
+            });
+        }
+    });
 </script>

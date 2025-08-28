@@ -17,16 +17,18 @@ services:
 
   app:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: ../backend
+      dockerfile: ../docker/Dockerfile
     container_name: carbon_management_api
     environment:
       NODE_ENV: development
       PORT: 3000
+      HOST: 0.0.0.0
       DATABASE_URL: postgresql://postgres:password@postgres:5432/carbon_management
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
       JWT_EXPIRES_IN: 7d
-      CORS_ORIGIN: http://localhost:3000
+      LOG_LEVEL: info
+      CORS_ORIGIN: http://localhost:3000,http://localhost:3001
     ports:
       - "3000:3000"
     depends_on:
@@ -34,9 +36,14 @@ services:
     networks:
       - carbon_network
     volumes:
-      - ../src:/app/src
-      - ../package.json:/app/package.json
-      - ../tsconfig.json:/app/tsconfig.json
+      # 開發環境：掛載源碼以便熱重載
+      - ../backend/src:/app/src
+      - ../backend/package.json:/app/package.json
+      - ../backend/tsconfig.json:/app/tsconfig.json
+      - ../backend/drizzle.config.ts:/app/drizzle.config.ts
+    working_dir: /app
+    command: npm run dev
+    restart: unless-stopped
 
 volumes:
   postgres_data:

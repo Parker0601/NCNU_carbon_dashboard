@@ -89,8 +89,9 @@
     "gulp-hb": "^8.0.0",
     "gulp-if": "^3.0.0",
     "gulp-order": "^1.2.0",
+    "gulp-plumber": "^1.2.1",
     "gulp-prettify": "^0.5.0",
-    "gulp-rename": "^2.0.0",
+    "gulp-rename": "^2.1.0",
     "gulp-rewrite-css": "^1.1.2",
     "gulp-rtlcss": "^1.4.1",
     "gulp-sass": "^5.1.0",
@@ -113,7 +114,9 @@
   },
   "scripts": {
     "gulp": "gulp",
-    "start": "npm run gulp"
+    "start": "npm run gulp",
+    "build": "gulp",
+    "dev": "gulp build"
   },
   "browserslist": [
     "last 2 versions",

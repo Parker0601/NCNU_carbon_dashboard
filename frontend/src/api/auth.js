@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 // Set the base URL for the backend API
-const API_BASE_URL = 'http://localhost:3000'; // 修改為你的後端伺服器地址
+const API_BASE_URL = 'http://localhost:3000/api/v1'; // 修改為你的後端伺服器地址
 
 /**
  * Register a new user

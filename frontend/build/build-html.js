@@ -11,9 +11,10 @@ gulp.task('build-html', function (done) {
 	gulp
 		/* handlebar page src */
 		.src([
-			build.config.path.src + '/content/**/*.hbs',
-        	('!' + build.config.path.src + '/content/do_not_include/**/*.hbs')
-			])
+		build.config.path.src + '/content/**/*.hbs',
+		build.config.path.src + '/template/pages/**/*.hbs', // ★ 新增這行
+		'!' + build.config.path.src + '/content/do_not_include/**/*.hbs'
+		])
 		.pipe(hb({
 			partials: build.config.path.src + '/template/**/*.hbs',
 			helpers: build.config.path.src + '/template/_helpers/*.js',

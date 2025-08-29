@@ -63,27 +63,31 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
         </script>
         <style>
             /* 在頁面加載時隱藏所有角色相關內容 */
-            body:not([data-loaded="true"]) .role-nav-item {
+            body:not([data-loaded="true"]) .role-nav-item
+            {
                 display: none !important;
             }
 
         </style>
         <!-- 新增：根據當前角色顯示對應側邊欄項 -->
         <style>
-            .role-nav-item {
+            .role-nav-item
+            {
                 display: none !important;
             }
 
             html[data-user-role="boss"] .role-nav-item[data-role="boss"],
             html[data-user-role="manager"] .role-nav-item[data-role="manager"],
-            html[data-user-role="staff"] .role-nav-item[data-role="staff"] {
+            html[data-user-role="staff"] .role-nav-item[data-role="staff"]
+            {
                 display: block !important;
             }
 
         </style>
         <!-- 新增：隱藏整個側邊欄菜單，防止頁面初始閃現 -->
         <style>
-            #js-nav-menu {
+            #js-nav-menu
+            {
                 visibility: hidden !important;
             }
 

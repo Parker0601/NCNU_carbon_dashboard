@@ -1,67 +1,69 @@
-/**
- * 角色導航管理
- * 根據用戶登錄的角色顯示/隱藏相應的導航選項
- */
-$(document).ready(function() {
-    // 從localStorage獲取用戶角色
-    const userRole = localStorage.getItem('userRole');
-    console.log('當前用戶角色:', userRole);
-    
-    // 設置根元素的角色屬性
-    const navMenu = document.getElementById('js-nav-menu');
-    if (navMenu) {
-        navMenu.setAttribute('data-current-role', userRole || 'none');
-    }
-    
-    // 恢復主管專區的展開狀態（僅當用戶是主管時）
-    if (userRole === 'manager') {
-        const managerArea = $('.role-nav-item[data-role="manager"]');
-        const savedState = JSON.parse(localStorage.getItem('navState') || '{}');
-        
-        // 恢復所有保存的展開狀態
-        Object.keys(savedState).forEach(id => {
-            const $item = $(`#${id}`);
-            if ($item.length && savedState[id]) {
-                $item.addClass('open')
-                    .find('a:first')
-                    .attr('aria-expanded', true)
-                    .find('b:first')
-                    .html('[-]');
-                
-                $item.find('ul:first').show();
-            }
-        });
-        
-        // 監聽所有可展開項目的點擊事件
-        managerArea.find('a:first').on('mousedown', function() {
-            const $parentLi = $(this).closest('li');
-            const itemId = $parentLi.attr('id');
-            
-            // 延遲執行，等待原始導航邏輯完成
-            setTimeout(() => {
-                const navState = JSON.parse(localStorage.getItem('navState') || '{}');
-                navState[itemId] = $parentLi.hasClass('open');
-                localStorage.setItem('navState', JSON.stringify(navState));
-            }, 500);
-        });
-    }
-    
-    // 防止未授權訪問
-    $(document).on('click', 'a', function(e) {
-        const $link = $(this);
-        const href = $link.attr('href');
-        
-        // 檢查是否是受限制的頁面
-        if (href && href.includes('_dashboard') || href.includes('manager_')) {
-            const requiredRole = href.includes('boss_') ? 'boss' : 
-                               href.includes('manager_') ? 'manager' : 
-                               href.includes('staff_') ? 'staff' : null;
-            
-            if (requiredRole && userRole !== requiredRole) {
-                e.preventDefault();
-                alert('您沒有權限訪問此頁面');
-                return false;
-            }
-        }
+// role-nav.js
+(function () {
+  var OBSERVER_STARTED = false;
+
+  function normRole(r) {
+    var m = { '1': 'staff', '2': 'manager', '3': 'boss' };
+    return m[String(r)] || String(r || '');
+  }
+
+  function applyRoleNavHard(role) {
+    var nav = document.getElementById('js-nav-menu');
+    if (!nav) return;
+
+    var items = nav.querySelectorAll('.role-nav-item');
+    items.forEach(function (li) {
+      var r = li.getAttribute('data-role');
+      li.style.display = (r === role) ? '' : 'none';
     });
-}); 
+
+    var title = nav.querySelector('.role-based-title');
+    if (title) {
+      var anyVisible = Array.prototype.some.call(items, function (li) {
+        return li.style.display !== 'none';
+      });
+      title.style.display = anyVisible ? '' : 'none';
+    }
+  }
+
+  function startNavObserver(role) {
+    var nav = document.getElementById('js-nav-menu');
+    if (!nav || OBSERVER_STARTED) return;
+    OBSERVER_STARTED = true;
+
+    var mo = new MutationObserver(function () {
+      applyRoleNavHard(role);
+    });
+    mo.observe(nav, { childList: true, subtree: true, attributes: true });
+  }
+
+  window.addEventListener('load', async function () {
+    try {
+      if (typeof Auth?.ensureAuth !== 'function') {
+        console.error('[role-nav] Auth.ensureAuth 不可用，請確認 js/auth.js 已在 <head> 載入');
+        return;
+      }
+      await Auth.ensureAuth();
+      var me = await Auth.getCurrentUser();
+      var role = normRole(me && me.role);
+
+      if (role) {
+        document.documentElement.setAttribute('data-user-role', role);
+        localStorage.setItem('userRole', role);
+        applyRoleNavHard(role);
+        startNavObserver(role);
+      } else {
+        localStorage.removeItem('userRole');
+      }
+    } catch (e) {
+      // 未授權會被 auth.js 處理導回登入
+    } finally {
+      var nav = document.getElementById('js-nav-menu');
+      if (nav) nav.style.visibility = '';
+      document.body && document.body.setAttribute('data-loaded', 'true');
+    }
+  });
+
+  // optional: 手動調用用於除錯
+  window.RoleNav = { apply: applyRoleNavHard, normRole };
+})();

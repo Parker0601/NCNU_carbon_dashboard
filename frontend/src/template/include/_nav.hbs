@@ -683,46 +683,59 @@
 	</li>
 </ul>
 <script>
-	document.addEventListener('DOMContentLoaded', () =>
-	{
-		const nav = document.getElementById('js-nav-menu');
-		const currentRole = localStorage.getItem('currentRole');
-		// 把 currentRole 同步到 data-current-role（方便 CSS 或其他 script 讀）
-		nav.dataset.currentRole = currentRole;
-		// 只留跟 currentRole 相同的那一項，其他先隱藏
-		nav.querySelectorAll('.role-nav-item').forEach(li =>
-		{
-			if (li.dataset.role !== currentRole)
-			{
-				li.style.display = 'none';
-			}
-			else
-			{
-				li.style.display = '';
-			}
-		});
-	});
-</script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const user = JSON.parse(localStorage.getItem('user'));
-        const token = localStorage.getItem('token');
+  (function () {
+    // 把 '1'|'2'|'3' 轉成人類可讀的 'staff'|'manager'|'boss'
+    function normRole(r) {
+      var map = { '1': 'staff', '2': 'manager', '3': 'boss' };
+      return map[String(r)] || String(r || '');
+    }
 
-        if (user && token) {
-            // 根據角色顯示對應的導航項目
-            document.querySelectorAll('.role-nav-item').forEach(item => {
-                const role = item.getAttribute('data-role');
-                if (role === user.role) {
-                    item.style.display = 'block';
-                } else {
-                    item.style.display = 'none';
-                }
-            });
-        } else {
-            // 如果未登入，隱藏所有角色相關的導航項目
-            document.querySelectorAll('.role-nav-item').forEach(item => {
-                item.style.display = 'none';
-            });
-        }
+    // 先從快取拿（登入後 login.js 會寫 localStorage.userRole）
+    function getCachedRole() {
+      return normRole(localStorage.getItem('userRole') || localStorage.getItem('currentRole'));
+    }
+
+    // 套用隱藏規則：只顯示屬於自己的角色群組（.role-nav-item[data-role]）
+    function applyRoleNav(role) {
+      var nav = document.getElementById('js-nav-menu');
+      if (!nav) return;
+
+      var items = nav.querySelectorAll('.role-nav-item');
+      items.forEach(function (li) {
+        var r = li.getAttribute('data-role');
+        li.style.display = (r === role) ? '' : 'none';
+      });
+
+      // 可選：沒有任何角色群組時，隱藏「角色儀表盤」標題
+      var title = nav.querySelector('.role-based-title');
+      if (title) {
+        var anyVisible = Array.prototype.some.call(items, function (li) {
+          return li.style.display !== 'none';
+        });
+        title.style.display = anyVisible ? '' : 'none';
+      }
+    }
+
+    // 主流程：DOMReady 後執行
+    document.addEventListener('DOMContentLoaded', function () {
+      // 先用快取（無依賴、最即時）
+      var role = getCachedRole();
+      if (role) applyRoleNav(role);
+
+      // 若有載入 auth.js，則再用 /profile 矯正一次（避免快取過期）
+      if (window.Auth && typeof Auth.getCurrentUser === 'function') {
+        Auth.getCurrentUser()
+          .then(function (me) {
+            var realRole = normRole(me && me.role);
+            if (realRole) {
+              localStorage.setItem('userRole', realRole);
+              applyRoleNav(realRole);
+            }
+          })
+          .catch(function () {
+            /* 忽略，保留快取結果 */
+          });
+      }
     });
+  })();
 </script>

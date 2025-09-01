@@ -1,7 +1,7 @@
 {{#> 
-	layouts/auth 
-	title="登入" 
-	pagename="page_login"
+    layouts/auth 
+    title="註冊" 
+    pagename="page_register"
 }}
 
 {{#*inline "head-block"}}
@@ -10,141 +10,100 @@
 
 {{#*inline "content-block"}}
 <div class="page-wrapper auth">
-	<div class="page-inner bg-brand-gradient">
-		<div class="page-content-wrapper bg-transparent m-0">
-			<div class="height-10 w-100 shadow-lg px-4 bg-brand-gradient">
-				<div class="d-flex align-items-center container p-0">
+    <div class="page-inner bg-brand-gradient">
+        <div class="page-content-wrapper bg-transparent m-0">
+            <div class="height-10 w-100 shadow-lg px-4 bg-brand-gradient">
+                <div class="d-flex align-items-center container p-0">
 
-					<div class="page-logo width-mobile-auto m-0 align-items-center justify-content-center p-0 bg-transparent bg-img-none shadow-0 height-9 border-0">
-						<a href="javascript:void(0)" class="page-logo-link press-scale-down d-flex align-items-center">
-						<img src="img/logo.png" alt="{{app}} WebApp" aria-roledescription="logo">
-						<span class="page-logo-text mr-1">{{app-name}}</span>
-						</a>
-					</div>
-					<span class="text-white opacity-50 ml-auto mr-2 hidden-sm-down">
-						已經有帳號了嗎？
-					</span>
-					<a href="page_login.html" class="btn-link text-white ml-auto ml-sm-0">
-						安全登入
-					</a>
-				</div>
-			</div>
-			<div class="flex-1" style="background: url(img/svg/pattern-1.svg) no-repeat center bottom fixed; background-size: cover;">
-				<div class="container py-4 py-lg-5 my-lg-5 px-4 px-sm-0">
-					<div class="row">
+                    <div class="page-logo width-mobile-auto m-0 align-items-center justify-content-center p-0 bg-transparent bg-img-none shadow-0 height-9 border-0">
+                        <a href="javascript:void(0)" class="page-logo-link press-scale-down d-flex align-items-center">
+                            <img src="img/logo.png" alt="{{app}} WebApp" aria-roledescription="logo">
+                            <span class="page-logo-text mr-1">{{app-name}}</span>
+                        </a>
+                    </div>
+                    <span class="text-white opacity-50 ml-auto mr-2 hidden-sm-down">
+                        已經有帳號了嗎？
+                    </span>
+                    <a href="page_login.html" class="btn-link text-white ml-auto ml-sm-0">
+                        安全登入
+                    </a>
+                </div>
+            </div>
+            <div class="flex-1" style="background: url(img/svg/pattern-1.svg) no-repeat center bottom fixed; background-size: cover;">
+                <div class="container py-4 py-lg-5 my-lg-5 px-4 px-sm-0">
+                    <div class="row">
 
-						<div class="col-xl-12">
-							<h2 class="fs-xxl fw-500 mt-4 text-white text-center">
-								立即註冊，完全免費！
-								<small class="h3 fw-300 mt-3 mb-5 text-white opacity-60 hidden-sm-down">
-								註冊完全免費，限時開放。您可以在手機、桌機或平板上使用 {{app}}，
-								<br>隨時隨地，立即上手！
-								</small>
-							</h2>
-						</div>
+                        <div class="col-xl-6 ml-auto mr-auto">
+                            <div class="card p-4 rounded-plus bg-faded">
 
-						<div class="col-xl-6 ml-auto mr-auto">
-							<div class="card p-4 rounded-plus bg-faded">
+                                <form id="js-register" novalidate>
 
-								<div class="alert alert-primary text-dark" role="alert">
-									<strong>注意！</strong> 由於伺服器維護，從 9:30GTA 到 12GTA，驗證郵件可能會延遲最多 10 分鐘。
-								</div>
+                                    <!-- 姓名 -->
+                                    <div class="form-group">
+                                        <label class="form-label" for="name">姓名</label>
+                                        <input type="text" id="name" class="form-control" placeholder="請輸入姓名" required>
+                                        <div class="invalid-feedback">請填寫此欄位。</div>
+                                    </div>
 
-								<form id="js-login" novalidate="" action="intel_analytics_dashboard.html">
+                                    <!-- 電子郵件 -->
+                                    <div class="form-group">
+                                        <label class="form-label" for="mail">電子郵件</label>
+                                        <input type="email" id="mail" class="form-control" placeholder="請輸入電子郵件" required>
+                                        <div class="invalid-feedback">請填寫此欄位。</div>
+                                    </div>
 
-									<div class="form-group row">
-										<label class="col-xl-12 form-label" for="fname">您的名字和姓氏</label>
-										<div class="col-6 pr-1">
-											<input type="text" id="fname" class="form-control" placeholder="名字" required>
-											<div class="invalid-feedback">請填寫此欄位。</div>
-										</div>
-										<div class="col-6 pl-1">
-											<input type="text" id="lname" class="form-control" placeholder="姓氏" required>
-											<div class="invalid-feedback">請填寫此欄位。</div>
-										</div>
-									</div>
+                                    <!-- 密碼 -->
+                                    <div class="form-group">
+                                        <label class="form-label" for="userpassword">請設定密碼</label>
+                                        <input type="password" id="userpassword" class="form-control" placeholder="至少 8 個字元" minlength="8" required>
+                                        <div class="invalid-feedback">請填寫此欄位（至少 8 碼）。</div>
+                                        <div class="help-block">
+                                            建議使用 8–20 個字元，包含英數混合（可含符號）以提高強度。
+                                        </div>
+                                    </div>
 
-									<div class="form-group">
-										<label class="form-label" for="emailverify">電子郵件（用於驗證和帳戶恢復）</label>
-										<input type="email" id="emailverify" class="form-control" placeholder="請輸入電子郵件" required>
-										<div class="invalid-feedback">請填寫此欄位。</div>
-										<div class="help-block">此電子郵件同時也將作為您的登入帳號</div>
-									</div>
-									<div class="form-group">
-										<label class="form-label" for="userpassword">請設定密碼：<br>請勿重複使用銀行或其他重要帳號的密碼。</label>
-										<input type="password" id="userpassword" class="form-control" placeholder="至少 8 個字元" required>
-										<div class="invalid-feedback">請填寫此欄位。</div>
-										<div class="help-block">密碼需為 8-20 個字元，包含英文字母與數字，且不得包含空格、特殊符號或表情符號。</div>
-									</div>
-									<div class="form-group demo">
-										<div class="custom-control custom-checkbox">
-											<input type="checkbox" class="custom-control-input" id="terms" required>
-											<label class="custom-control-label" for="terms">我同意條款與條件</label>
-											<div class="invalid-feedback">您必須同意才能繼續</div>
-										</div>
-										<div class="custom-control custom-checkbox">
-											<input type="checkbox" class="custom-control-input" id="newsletter">
-											<label class="custom-control-label" for="newsletter">訂閱電子報（我們不會寄太多信件）</label>
-										</div>
-									</div>
-									<div class="row no-gutters">
-										<div class="col-md-4 ml-auto text-right">
-											<button id="js-login-btn" type="submit" class="btn btn-block btn-danger btn-lg mt-3">發送驗證信</button>
-										</div>
-									</div>
-								</form>
-							</div>
-						</div>
-					</div>
-				</div>
-				<div class="position-absolute pos-bottom pos-left pos-right p-3 text-center text-white">
-					{{{copyright-inverse}}}
-				</div>
-			</div>
-		</div>
-	</div>
+                                    <!-- 確認密碼 -->
+                                    <div class="form-group">
+                                        <label class="form-label" for="userpassword2">再次輸入密碼</label>
+                                        <input type="password" id="userpassword2" class="form-control" placeholder="請再次輸入密碼" minlength="8" required>
+                                        <div class="invalid-feedback">請再次輸入相同的密碼。</div>
+                                    </div>
+
+                                    <!-- 隱藏角色欄位（固定 user） -->
+                                    <input type="hidden" id="role" value="user">
+
+                                    <!-- 條款同意 -->
+                                    <div class="form-group demo">
+                                        <div class="custom-control custom-checkbox">
+                                            <input type="checkbox" class="custom-control-input" id="terms" required>
+                                            <label class="custom-control-label" for="terms">我同意條款與條件</label>
+                                            <div class="invalid-feedback">您必須同意才能繼續</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 送出按鈕 -->
+                                    <div class="row no-gutters">
+                                        <div class="col-md-4 ml-auto text-right">
+                                            <button id="js-register-btn" type="submit" class="btn btn-block btn-danger btn-lg mt-3">建立帳號</button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+                <div class="position-absolute pos-bottom pos-left pos-right p-3 text-center text-white">
+                    {{{copyright-inverse}}}
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {{/inline}}
 
 {{#*inline "scripts-block"}}
-<script>
-    $("#js-login-btn").click(function(event) {
-        event.preventDefault();
-
-        var form = $("#js-login");
-
-        if (form[0].checkValidity() === false) {
-            event.stopPropagation();
-        } else {
-            const formData = {
-                firstName: $("#fname").val(),
-                lastName: $("#lname").val(),
-                email: $("#emailverify").val(),
-                password: $("#userpassword").val(),
-                termsAccepted: $("#terms").is(":checked"),
-                newsletter: $("#newsletter").is(":checked")
-            };
-
-            $.ajax({
-                url: "http://localhost:3000/api/register", 
-                type: "POST",
-                contentType: "application/json",
-                data: JSON.stringify(formData),
-                success: function(response) {
-                    alert("註冊成功！請檢查您的電子郵件以完成驗證。");
-                    form[0].reset();
-                    form.removeClass('was-validated');
-                },
-                error: function(xhr) {
-                    const errorMessage = xhr.responseJSON?.message || "註冊過程中發生錯誤。";
-                    alert(errorMessage);
-                }
-            });
-        }
-
-        form.addClass('was-validated');
-    });
-</script>
+<script src="js/register.js"></script>
 {{/inline}}
 
 {{/layouts/auth}}

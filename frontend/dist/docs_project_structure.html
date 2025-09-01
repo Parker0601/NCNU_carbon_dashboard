@@ -53,30 +53,6 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
         <link rel="stylesheet" media="screen, print" href="css/json-path-picker/json-path-picker.css">
     </head>
     <!-- BEGIN Body -->
-    <!-- Possible Classes
-
-		* 'header-function-fixed'         - header is in a fixed at all times
-		* 'nav-function-fixed'            - left panel is fixed
-		* 'nav-function-minify'          - skew nav to maximize space
-		* 'nav-function-hidden'           - roll mouse on edge to reveal
-		* 'nav-function-top'              - relocate left pane to top
-		* 'mod-main-boxed'                - encapsulates to a container
-		* 'nav-mobile-push'               - content pushed on menu reveal
-		* 'nav-mobile-no-overlay'         - removes mesh on menu reveal
-		* 'nav-mobile-slide-out'          - content overlaps menu
-		* 'mod-bigger-font'               - content fonts are bigger for readability
-		* 'mod-high-contrast'             - 4.5:1 text contrast ratio
-		* 'mod-color-blind'               - color vision deficiency
-		* 'mod-pace-custom'               - preloader will be inside content
-		* 'mod-clean-page-bg'             - adds more whitespace
-		* 'mod-hide-nav-icons'            - invisible navigation icons
-		* 'mod-disable-animation'         - disables css based animations
-		* 'mod-hide-info-card'            - hides info card from left panel
-		* 'mod-lean-subheader'            - distinguished page header
-		* 'mod-nav-link'                  - clear breakdown of nav links
-
-		>>> more settings are described inside documentation page >>>
-	-->
     <body class="mod-bg-1 mod-nav-link ">
         <!-- DOC: script to save and load page settings -->
         <script>
@@ -219,13 +195,13 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
                             </li>
                             <!-- 主管儀表盤 -->
                             <!--
-							<li class="role-nav-item" data-role="manager" id="manager-dashboard-nav">
-								<a href="manager_dashboard.html" title="主管儀表盤" data-filter-tags="manager dashboard monitor">
-									<i class="fal fa-user-tie"></i>
-									<span class="nav-link-text" data-i18n="nav.dashboard_manager">主管儀表盤</span>
-								</a>
-							</li>
-							<!-- 主管專區 -->
+        			<li class="role-nav-item" data-role="manager" id="manager-dashboard-nav">
+        				<a href="manager_dashboard.html" title="主管儀表盤" data-filter-tags="manager dashboard monitor">
+        					<i class="fal fa-user-tie"></i>
+        					<span class="nav-link-text" data-i18n="nav.dashboard_manager">主管儀表盤</span>
+        				</a>
+        			</li>
+        			<!-- 主管專區 -->
                             <li class="role-nav-item manager-area" data-role="manager" id="manager-area-nav">
                                 <a href="#" title="主管專區" data-filter-tags="manager area overview">
                                     <i class="fal fa-analytics"></i>
@@ -266,13 +242,13 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
                             </li>
                             <!-- 員工儀表盤 -->
                             <!--
-							<li class="role-nav-item" data-role="staff" id="staff-dashboard-nav">
-								<a href="staff_dashboard.html" title="員工儀表盤" data-filter-tags="staff dashboard operation">
-									<i class="fal fa-user"></i>
-									<span class="nav-link-text" data-i18n="nav.dashboard_staff">員工操作台</span>
-								</a>
-							</li>
-							-->
+        			<li class="role-nav-item" data-role="staff" id="staff-dashboard-nav">
+        				<a href="staff_dashboard.html" title="員工儀表盤" data-filter-tags="staff dashboard operation">
+        					<i class="fal fa-user"></i>
+        					<span class="nav-link-text" data-i18n="nav.dashboard_staff">員工操作台</span>
+        				</a>
+        			</li>
+        			-->
                             <li class="role-nav-item staff-area" data-role="staff" id="staff-area-nav">
                                 <a href="#" title="員工操作台" data-filter-tags="staff dashboard operation">
                                     <i class="fal fa-analytics"></i>
@@ -864,25 +840,77 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
                             </li>
                         </ul>
                         <script>
-                            document.addEventListener('DOMContentLoaded', () =>
+                            (function()
                             {
-                                const nav = document.getElementById('js-nav-menu');
-                                const currentRole = localStorage.getItem('currentRole');
-                                // 把 currentRole 同步到 data-current-role（方便 CSS 或其他 script 讀）
-                                nav.dataset.currentRole = currentRole;
-                                // 只留跟 currentRole 相同的那一項，其他先隱藏
-                                nav.querySelectorAll('.role-nav-item').forEach(li =>
+                                // 把 '1'|'2'|'3' 轉成人類可讀的 'staff'|'manager'|'boss'
+                                function normRole(r)
                                 {
-                                    if (li.dataset.role !== currentRole)
+                                    var map = {
+                                        '1': 'staff',
+                                        '2': 'manager',
+                                        '3': 'boss'
+                                    };
+                                    return map[String(r)] || String(r || '');
+                                }
+
+                                // 先從快取拿（登入後 login.js 會寫 localStorage.userRole）
+                                function getCachedRole()
+                                {
+                                    return normRole(localStorage.getItem('userRole') || localStorage.getItem('currentRole'));
+                                }
+
+                                // 套用隱藏規則：只顯示屬於自己的角色群組（.role-nav-item[data-role]）
+                                function applyRoleNav(role)
+                                {
+                                    var nav = document.getElementById('js-nav-menu');
+                                    if (!nav) return;
+
+                                    var items = nav.querySelectorAll('.role-nav-item');
+                                    items.forEach(function(li)
                                     {
-                                        li.style.display = 'none';
+                                        var r = li.getAttribute('data-role');
+                                        li.style.display = (r === role) ? '' : 'none';
+                                    });
+
+                                    // 可選：沒有任何角色群組時，隱藏「角色儀表盤」標題
+                                    var title = nav.querySelector('.role-based-title');
+                                    if (title)
+                                    {
+                                        var anyVisible = Array.prototype.some.call(items, function(li)
+                                        {
+                                            return li.style.display !== 'none';
+                                        });
+                                        title.style.display = anyVisible ? '' : 'none';
                                     }
-                                    else
+                                }
+
+                                // 主流程：DOMReady 後執行
+                                document.addEventListener('DOMContentLoaded', function()
+                                {
+                                    // 先用快取（無依賴、最即時）
+                                    var role = getCachedRole();
+                                    if (role) applyRoleNav(role);
+
+                                    // 若有載入 auth.js，則再用 /profile 矯正一次（避免快取過期）
+                                    if (window.Auth && typeof Auth.getCurrentUser === 'function')
                                     {
-                                        li.style.display = '';
+                                        Auth.getCurrentUser()
+                                            .then(function(me)
+                                            {
+                                                var realRole = normRole(me && me.role);
+                                                if (realRole)
+                                                {
+                                                    localStorage.setItem('userRole', realRole);
+                                                    applyRoleNav(realRole);
+                                                }
+                                            })
+                                            .catch(function()
+                                            {
+                                                /* 忽略，保留快取結果 */
+                                            });
                                     }
                                 });
-                            });
+                            })();
 
                         </script>
                         <div class="filter-message js-filter-message bg-success-600"></div>
@@ -1529,8 +1557,8 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
                                 <a href="#" data-toggle="dropdown" title="drlantern@gotbootstrap.com" class="header-icon d-flex align-items-center justify-content-center ml-2">
                                     <img src="img/demo/avatars/avatar-admin.png" class="profile-image rounded-circle" alt="Dr. Codex Lantern">
                                     <!-- you can also add username next to the avatar with the codes below:
-									<span class="ml-1 mr-1 text-truncate text-truncate-header hidden-xs-down">Me</span>
-									<i class="ni ni-chevron-down hidden-xs-down"></i> -->
+          				<span class="ml-1 mr-1 text-truncate text-truncate-header hidden-xs-down">Me</span>
+          				<i class="ni ni-chevron-down hidden-xs-down"></i> -->
                                 </a>
                                 <div class="dropdown-menu dropdown-menu-animated dropdown-lg">
                                     <div class="dropdown-header bg-trans-gradient d-flex flex-row py-4 rounded-top">
@@ -1584,7 +1612,6 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
                     </header>
                     <!-- END Page Header -->
                     <!-- BEGIN Page Content -->
-                    <!-- the #js-page-content id is needed for some plugins to initialize -->
                     <main id="js-page-content" role="main" class="page-content">
                         <ol class="breadcrumb page-breadcrumb">
                             <li class="breadcrumb-item"><a href="javascript:void(0);">SmartAdmin</a></li>
@@ -1630,9 +1657,9 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
                             </div>
                         </div>
                     </main>
+                    <!-- END Page Content -->
                     <!-- this overlay is activated only when mobile menu is triggered -->
-                    <div class="page-content-overlay" data-action="toggle" data-class="mobile-nav-on"></div> <!-- END Page Content -->
-                    <!-- BEGIN Page Footer -->
+                    <div class="page-content-overlay" data-action="toggle" data-class="mobile-nav-on"></div> <!-- BEGIN Page Footer -->
                     <footer class="page-footer" role="contentinfo">
                         <div class="d-flex align-items-center flex-1 text-muted">
                             <span class="hidden-md-down fw-700">2024 © SmartAdmin by&nbsp;<a href='https://www.gotbootstrap.com' class='text-primary fw-500' title='gotbootstrap.com' target='_blank'>gotbootstrap.com</a></span>
@@ -2435,24 +2462,21 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
         </div>
         <!-- END Page Settings -->
         <!-- base vendor bundle: 
-			 DOC: if you remove pace.js from core please note on Internet Explorer some CSS animations may execute before a page is fully loaded, resulting 'jump' animations 
-						+ pace.js (recommended)
-						+ jquery.js (core)
-						+ jquery-ui-cust.js (core)
-						+ popper.js (core)
-						+ bootstrap.js (core)
-						+ slimscroll.js (extension)
-						+ app.navigation.js (core)
-						+ ba-throttle-debounce.js (core)
-						+ waves.js (extension)
-						+ smartpanels.js (extension)
-						+ src/../jquery-snippets.js (core) -->
+    	 DOC: if you remove pace.js from core please note on Internet Explorer some CSS animations may execute before a page is fully loaded, resulting 'jump' animations 
+    				+ pace.js (recommended)
+    				+ jquery.js (core)
+    				+ jquery-ui-cust.js (core)
+    				+ popper.js (core)
+    				+ bootstrap.js (core)
+    				+ slimscroll.js (extension)
+    				+ app.navigation.js (core)
+    				+ ba-throttle-debounce.js (core)
+    				+ waves.js (extension)
+    				+ smartpanels.js (extension)
+    				+ src/../jquery-snippets.js (core) -->
         <script src="js/vendors.bundle.js"></script>
         <script src="js/app.bundle.js"></script>
-        <!-- 角色导航管理脚本 -->
         <script src="js/role-nav.js"></script>
-        <!-- 角色验证脚本 -->
-        <script src="/js/role-validation.js"></script>
         <script src="js/json-path-picker/json-path-picker.js"></script>
         <script type="text/javascript">
             $(document).ready(function()

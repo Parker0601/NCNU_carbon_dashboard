@@ -937,6 +937,39 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
                             });
 
                         </script>
+                        <script>
+                            document.addEventListener('DOMContentLoaded', function()
+                            {
+                                const user = JSON.parse(localStorage.getItem('user'));
+                                const token = localStorage.getItem('token');
+
+                                if (user && token)
+                                {
+                                    // 根據角色顯示對應的導航項目
+                                    document.querySelectorAll('.role-nav-item').forEach(item =>
+                                    {
+                                        const role = item.getAttribute('data-role');
+                                        if (role === user.role)
+                                        {
+                                            item.style.display = 'block';
+                                        }
+                                        else
+                                        {
+                                            item.style.display = 'none';
+                                        }
+                                    });
+                                }
+                                else
+                                {
+                                    // 如果未登入，隱藏所有角色相關的導航項目
+                                    document.querySelectorAll('.role-nav-item').forEach(item =>
+                                    {
+                                        item.style.display = 'none';
+                                    });
+                                }
+                            });
+
+                        </script>
                         <div class="filter-message js-filter-message bg-success-600"></div>
                     </nav>
                     <!-- END PRIMARY NAVIGATION -->
@@ -2472,10 +2505,6 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
 						+ src/../jquery-snippets.js (core) -->
         <script src="js/vendors.bundle.js"></script>
         <script src="js/app.bundle.js"></script>
-        <!-- 角色导航管理脚本 -->
-        <script src="js/role-nav.js"></script>
-        <!-- 角色验证脚本 -->
-        <script src="/js/role-validation.js"></script>
     </body>
     <!-- END Body -->
 </html>

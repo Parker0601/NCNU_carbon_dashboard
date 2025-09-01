@@ -94,18 +94,16 @@
 							</h1>
 							<div class="card p-4 rounded-plus bg-faded">
 								<div class="alert alert-primary" id="login-info" style="display: none;"></div>
-								<form id="js-login" novalidate="">
+								<form id="js-login" novalidate>
 									<div class="form-group">
-										<label class="form-label" for="username">使用者名稱</label>
-										<input type="text" id="username" class="form-control form-control-lg" placeholder="輸入您的帳號" value="" required>
-										<div class="invalid-feedback">請輸入使用者名稱</div>
-										<div class="help-block">B123(老闆帳號) / M123(主管帳號) / S123(員工帳號)</div>
+										<label class="form-label" for="username">電子郵件</label>
+										<input type="email" id="username" class="form-control form-control-lg" placeholder="輸入您的電子郵件" required>
+										<div class="invalid-feedback">請輸入電子郵件</div>
 									</div>
 									<div class="form-group">
 										<label class="form-label" for="password">密碼</label>
-										<input type="password" id="password" class="form-control form-control-lg" placeholder="輸入密碼" value="" required>
+										<input type="password" id="password" class="form-control form-control-lg" placeholder="輸入密碼" required>
 										<div class="invalid-feedback">請輸入密碼</div>
-										<div class="help-block">所有密碼均為：123</div>
 									</div>
 									<div class="form-group text-left">
 										<div class="custom-control custom-checkbox">
@@ -133,65 +131,7 @@
 {{/inline}}
 
 {{#*inline "scripts-block"}}
-<script>
-	$(document).ready(function() {
-		// 角色示範帳號點擊
-		$('.dropdown-item').click(function(e) {
-			e.preventDefault();
-			const username = $(this).data('username');
-			const password = $(this).data('password');
-			$('#username').val(username);
-			$('#password').val(password);
-			$('#login-info').html('已自動填充 <strong>' + $(this).text() + '</strong> 的登入資訊').show();
-		});
-
-		// 老闆快速登入
-		$('#boss-quick-login').click(function(e) {
-			e.preventDefault();
-			localStorage.setItem('currentRole', 'boss');
-			localStorage.setItem('userName', '老闆');
-			localStorage.setItem('userID', 'B123');
-			window.location.href = 'boss_dashboard.html';
-		});
-
-		// 登入按鈕處理
-		$("#js-login-btn").click(async function(event) {
-			event.preventDefault();
-
-			// 取得表單資料
-			const username = $('#username').val();
-			const password = $('#password').val();
-
-			// 表單驗證
-			const form = $("#js-login");
-			form.addClass('was-validated');
-
-			if (form[0].checkValidity() === false) {
-				return false;
-			}
-
-			try {
-				// 呼叫後端登入 API
-				const response = await login({ email: username, password });
-
-				// 儲存 JWT Token
-				localStorage.setItem('token', response.token);
-				localStorage.setItem('user', JSON.stringify(response.user));
-
-				// 顯示登入成功資訊
-				$('#login-info').html('<strong>登入成功!</strong> 正在跳轉到主頁...').removeClass('alert-danger').addClass('alert-success').show();
-
-				// 延遲跳轉
-				setTimeout(function() {
-					window.location.href = 'dashboard.html';
-				}, 1000);
-			} catch (error) {
-				// 顯示錯誤資訊
-				$('#login-info').html('<strong>登入失敗!</strong> ' + (error.message || '請稍後再試')).removeClass('alert-success').addClass('alert-danger').show();
-			}
-		});
-	});
-</script>
+  <script src="js/login.js"></script>
 {{/inline}}
 
 {{/layouts/auth}}

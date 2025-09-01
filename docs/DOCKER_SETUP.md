@@ -63,7 +63,7 @@ DATABASE_URL=postgresql://postgres:password@localhost:5432/carbon_management
 
 # JWT Configuration
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
-JWT_EXPIRES_IN=7d
+JWT_EXPIRES_IN=7d 
 
 # CORS Configuration
 CORS_ORIGIN=http://localhost:3000

@@ -1,17 +1,32 @@
-import path from "node:path";
-import fs from "node:fs";
+import path from "path";
+import fs from "fs";
 import dotenv from "dotenv";
 import { z } from "zod";
 
-// 1) 載入 .env（預設放在 backend/.env）
-const envPath = fs.existsSync(path.resolve(process.cwd(), ".env"))
-  ? path.resolve(process.cwd(), ".env")
-  : fs.existsSync(path.resolve(process.cwd(), "..", ".env"))
-  ? path.resolve(process.cwd(), "..", ".env")
-  : undefined;
-dotenv.config(envPath ? { path: envPath } : undefined);
+// 智能載入 .env 文件
+// 優先順序: backend/.env > ../.env > 當前目錄
+const envPaths = [
+  path.resolve(process.cwd(), ".env"),                    // backend/.env
+  path.resolve(process.cwd(), "..", ".env"),             // ../.env (根目錄)
+  path.resolve(process.cwd(), ".env.local"),             // backend/.env.local
+  path.resolve(process.cwd(), "..", ".env.local"),       // ../.env.local
+];
 
-// 2) 定義與驗證環境變數
+let envLoaded = false;
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    console.log(`✅ 載入環境變量: ${envPath}`);
+    envLoaded = true;
+    break;
+  }
+}
+
+if (!envLoaded) {
+  console.warn("⚠️  未找到 .env 文件，使用系統環境變量");
+}
+
+// 定義與驗證環境變數
 const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
@@ -42,7 +57,7 @@ if (!parsed.success) {
 
 const data = parsed.data;
 
-// 3) 方便使用的小工具與導出
+// 方便使用的小工具與導出
 const csv = (v?: string) =>
   v?.split(",").map((s) => s.trim()).filter(Boolean) ?? [];
 

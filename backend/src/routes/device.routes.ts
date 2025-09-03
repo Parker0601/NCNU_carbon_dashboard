@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { eq, desc, and, sql } from 'drizzle-orm';
+import { eq, desc, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { devices, issues, maintenanceRecords, users } from '@/db/schema';
 import { successResponse, errorResponse, notFoundResponse } from '@/utils/responses';
@@ -7,9 +7,7 @@ import { authenticateToken, requireUser, requireAdmin } from '@/middleware/auth'
 import { 
   reportIssueSchema, 
   maintenanceRecordSchema, 
-  updateDeviceStatusSchema,
-  deviceQuerySchema,
-  maintenanceHistoryQuerySchema 
+  updateDeviceStatusSchema
 } from '@/validators/device.validator';
 
 const router = Router();

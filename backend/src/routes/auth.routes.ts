@@ -33,7 +33,7 @@ router.post('/register', async (req: Request, res: Response) => {
       .values({
         name: validatedData.name,
         password: hashedPassword,
-        role: validatedData.role === 'user' ? '1' : validatedData.role === 'admin' ? '2' : '3',
+        role: validatedData.role,
         mail: validatedData.email,
         createTime: new Date(),
       })

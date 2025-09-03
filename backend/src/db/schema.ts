@@ -9,7 +9,7 @@ export const userRoleEnum = pgEnum('user_role', ['1', '2', '3']); // 1:一般員
 
 // users table
 export const users = pgTable('users', {
-  id: serial('id').primaryKey().notNull().unique(),
+  id: serial('id').primaryKey().notNull(),
   name: text('name').notNull(),
   password: text('password').notNull(),
   role: userRoleEnum('role').notNull(),
@@ -28,7 +28,7 @@ export const devices = pgTable('devices', {
 
 // scraps table
 export const scraps = pgTable('scraps', {
-  id: serial('id').primaryKey().notNull().unique(),
+  id: serial('id').primaryKey().notNull(),
   userId: integer('user_id').notNull().references(() => users.id),
   deviceId: integer('device_id').notNull().references(() => devices.id),
   type: text('type').notNull(),
@@ -40,7 +40,7 @@ export const scraps = pgTable('scraps', {
 
 // issues table
 export const issues = pgTable('issues', {
-  id: serial('id').primaryKey().notNull().unique(),
+  id: serial('id').primaryKey().notNull(),
   deviceId: integer('device_id').notNull().references(() => devices.id),
   description: text('description'),
   issuer: integer('issuer').notNull().references(() => users.id),
@@ -51,7 +51,7 @@ export const issues = pgTable('issues', {
 
 // maintenance_records table
 export const maintenanceRecords = pgTable('maintenance_records', {
-  id: serial('id').primaryKey().notNull().unique(),
+  id: serial('id').primaryKey().notNull(),
   issueId: integer('issue_id').notNull().references(() => issues.id),
   userId: integer('user_id').notNull().references(() => users.id),
   description: text('description').notNull(),
@@ -61,7 +61,7 @@ export const maintenanceRecords = pgTable('maintenance_records', {
 
 // schedule table
 export const schedule = pgTable('schedule', {
-  id: serial('id').primaryKey().notNull().unique(),
+  id: serial('id').primaryKey().notNull(),
   userId: integer('user_id').notNull().references(() => users.id),
   deviceId: integer('device_id').references(() => devices.id),
   title: text('title').notNull(),
@@ -73,7 +73,7 @@ export const schedule = pgTable('schedule', {
 
 // energy_record table
 export const energyRecord = pgTable('energy_record', {
-  id: serial('id').primaryKey().notNull().unique(),
+  id: serial('id').primaryKey().notNull(),
   deviceId: integer('device_id').references(() => devices.id),
   type: text('type'),
   date: date('date'),
@@ -82,7 +82,7 @@ export const energyRecord = pgTable('energy_record', {
 
 // carbon table
 export const carbon = pgTable('carbon', {
-  id: serial('id').primaryKey().notNull().unique(),
+  id: serial('id').primaryKey().notNull(),
   userId: integer('user_id').notNull().references(() => users.id),
   fuelName: text('Fuel_name').notNull(),
   consumption: doublePrecision('consumption').notNull(),

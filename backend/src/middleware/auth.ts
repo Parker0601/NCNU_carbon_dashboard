@@ -52,6 +52,13 @@ export const requireRole = (roles: string[]) => {
   };
 };
 
-export const requireAdmin = requireRole(['admin']);
-export const requireReviewer = requireRole(['admin', 'reviewer']);
-export const requireUser = requireRole(['user', 'admin', 'reviewer']); 
+// 角色定義常數
+export const USER_ROLES = {
+  EMPLOYEE: '1',    // 一般員工
+  MANAGER: '2',     // 主管
+  BOSS: '3'         // 老闆
+} as const;
+
+export const requireAdmin = requireRole([USER_ROLES.MANAGER, USER_ROLES.BOSS]); // 主管和老闆
+export const requireReviewer = requireRole([USER_ROLES.MANAGER, USER_ROLES.BOSS]); // 主管和老闆
+export const requireUser = requireRole([USER_ROLES.EMPLOYEE, USER_ROLES.MANAGER, USER_ROLES.BOSS]); // 所有員工 

@@ -3,9 +3,9 @@ import { relations } from 'drizzle-orm';
 
 // ENUM 定義
 export const scrapStatusEnum = pgEnum('scrap_status', ['1', '2', '3']);
-export const deviceStatusEnum = pgEnum('device_status', ['1', '2', '3']);
-export const issueStatusEnum = pgEnum('issue_status', ['1', '2', '3']);
-export const userRoleEnum = pgEnum('user_role', ['1', '2', '3']);
+export const deviceStatusEnum = pgEnum('device_status', ['1', '2', '3']); // 1:正常運行, 2:維護中, 3:故障
+export const issueStatusEnum = pgEnum('issue_status', ['1', '2', '3']); // 1:待處理, 2:處理中, 3:已解決
+export const userRoleEnum = pgEnum('user_role', ['1', '2', '3']); // 1:一般員工, 2:主管, 3:老闆
 
 // users table
 export const users = pgTable('users', {

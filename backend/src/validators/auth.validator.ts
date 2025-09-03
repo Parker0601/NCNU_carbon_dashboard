@@ -9,7 +9,7 @@ export const registerSchema = z.object({
   email: z.string().email('Invalid email format'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   name: z.string().min(2, 'Name must be at least 2 characters'),
-  role: z.enum(['user', 'admin', 'reviewer']).optional().default('user'),
+  role: z.enum(['1', '2', '3']).optional().default('1'),
 });
 
 export const changePasswordSchema = z.object({

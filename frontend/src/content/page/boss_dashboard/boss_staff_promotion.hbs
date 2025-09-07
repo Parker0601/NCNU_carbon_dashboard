@@ -1,0 +1,151 @@
+{{#> 
+    layouts/main 
+    title="員工升級管理" 
+    pagename="boss_employee_promotion"
+    heading="員工升級管理"
+    category_1="老闆專區"
+    pagedescription="維護員工等級、升遷申請與審核流程"
+}}
+
+{{#*inline "head-block"}}
+<style>
+  .search-container { margin-bottom: 20px; }
+  .table-container { margin-bottom: 40px; }
+  .btn-upgrade, .btn-approve, .btn-reject { font-size: 0.9rem; }
+</style>
+{{/inline}}
+
+{{#*inline "content-block"}}
+  <div class="row">
+    <div class="col-12">
+      <div class="panel">
+        <div class="panel-hdr"><h2>員工升級管理</h2></div>
+        <div class="panel-container show p-3">
+          <!-- 搜尋引擎 -->
+          <div class="search-container">
+            <input type="text" class="form-control" id="searchInput" placeholder="搜尋員工姓名...">
+          </div>
+
+          <!-- 員工列表 -->
+          <div class="table-container">
+            <h3>員工列表</h3>
+            <table class="table table-striped">
+              <thead>
+                <tr>
+                  <th>名字</th>
+                  <th>職位</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="employeeList">
+                <!-- Handlebars 模板將渲染在此 -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 審核列表 -->
+          <div class="table-container">
+            <h3>審核列表</h3>
+            <table class="table table-striped">
+              <thead>
+                <tr>
+                  <th>名字</th>
+                  <th>ID</th>
+                  <th>職位</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="reviewList">
+                <!-- Handlebars 模板將渲染在此 -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Handlebars 模板：員工列表 -->
+          <script id="employee-template" type="text/x-handlebars-template">
+            {{#each employees}}
+            <tr>
+              <td>{{name}}</td>
+              <td>{{position}}</td>
+              <td>
+                <button class="btn btn-primary btn-upgrade" data-name="{{name}}">升級為主管</button>
+              </td>
+            </tr>
+            {{/each}}
+          </script>
+
+          <!-- Handlebars 模板：審核列表 -->
+          <script id="review-template" type="text/x-handlebars-template">
+            {{#each reviews}}
+            <tr>
+              <td>{{name}}</td>
+              <td>{{id}}</td>
+              <td>{{position}}</td>
+              <td>
+                <button class="btn btn-success btn-approve" data-id="{{id}}">是</button>
+                <button class="btn btn-danger btn-reject" data-id="{{id}}">否</button>
+              </td>
+            </tr>
+            {{/each}}
+          </script>
+        </div>
+      </div>
+    </div>
+  </div>
+{{/inline}}
+
+{{#*inline "scripts-block"}}
+<script src="/js/vendors.bundle.js"></script>
+<script src="/js/app.bundle.js"></script>
+<script>
+  // 模擬數據
+  const employeeData = {
+    employees: [
+      { name: "張偉", position: "員工" },
+      { name: "李梅", position: "員工" },
+      { name: "王芳", position: "員工" }
+    ]
+  };
+  const reviewData = {
+    reviews: [
+      { name: "張偉", id: "EMP001", position: "員工" },
+      { name: "李梅", id: "EMP002", position: "員工" },
+      { name: "王芳", id: "EMP003", position: "員工" }
+    ]
+  };
+
+  // 編譯 Handlebars 模板
+  const employeeTemplate = Handlebars.compile(document.getElementById('employee-template').innerHTML);
+  const reviewTemplate = Handlebars.compile(document.getElementById('review-template').innerHTML);
+
+  // 渲染初始數據
+  document.getElementById('employeeList').innerHTML = employeeTemplate(employeeData);
+  document.getElementById('reviewList').innerHTML = reviewTemplate(reviewData);
+
+  // 搜尋功能
+  document.getElementById('searchInput').addEventListener('input', function(e) {
+    const searchTerm = e.target.value.toLowerCase();
+    const filteredEmployees = {
+      employees: employeeData.employees.filter(emp => emp.name.toLowerCase().includes(searchTerm))
+    };
+    const filteredReviews = {
+      reviews: reviewData.reviews.filter(rev => rev.name.toLowerCase().includes(searchTerm))
+    };
+    document.getElementById('employeeList').innerHTML = employeeTemplate(filteredEmployees);
+    document.getElementById('reviewList').innerHTML = reviewTemplate(filteredReviews);
+  });
+
+  // 按鈕事件處理
+  document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('btn-upgrade')) {
+      console.log(`升級為主管: ${e.target.dataset.name}`);
+    } else if (e.target.classList.contains('btn-approve')) {
+      console.log(`核准升級: ${e.target.dataset.id}`);
+    } else if (e.target.classList.contains('btn-reject')) {
+      console.log(`拒絕升級: ${e.target.dataset.id}`);
+    }
+  });
+</script>
+{{/inline}}
+
+{{/layouts/main}} 

@@ -2,7 +2,7 @@
 	<!-- 角色特定的儀表盤區域 -->
 	<li class="nav-title role-based-title">角色儀表盤</li>
 	<!-- 老闆儀表盤 -->
-	<li {{#is pagename "in" "boss_dashboard,boss_carbon_trading,boss_compliance_tracking,boss_finance_report,boss_risk_center"}}class="active open role-nav-item boss-area" {{else}} class="role-nav-item boss-area" {{/is}} data-role="boss" id="boss-area-nav">
+	<li {{#is pagename "in" "boss_dashboard,boss_carbon_trading,boss_compliance_tracking,boss_finance_report,boss_risk_center,boss_employee_promotion"}}class="active open role-nav-item boss-area" {{else}} class="role-nav-item boss-area" {{/is}} data-role="boss" id="boss-area-nav">
 		<a href="#" title="老闆儀表盤" data-filter-tags="boss dashboard summary">
 			<i class="{{iconPrefix}} fa-crown"></i>
 			<span class="nav-link-text">老闆儀表盤</span>
@@ -34,6 +34,10 @@
 					<span class="nav-link-text">風險中心</span>
 				</a>
 			</li>
+			<li {{#is pagename "===" "boss_employee_promotion"}}class="active" {{/is}}>
+				<a href="boss_staff_promotion.html" title="員工升級管理" data-filter-tags="boss employee promotion management">
+					<span class="nav-link-text">員工升級管理</span>
+				</a>
 		</ul>
 	</li>
 	<!-- 主管儀表盤 -->

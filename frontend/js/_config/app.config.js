@@ -114,3 +114,14 @@ var myapp_config = {
 	*/
 	jsArray : []
 };
+/* ---------- 全站 API 設定：請放在 app.config.js 的最後 ---------- */
+/* 有 dev-proxy（把 /api 代理到後端）→ 保持空字串 ''；
+   沒有 proxy、後端在 3000 → 改成 'http://localhost:3000' */
+window.API_ORIGIN = 'http://localhost:3000';            // 或 'http://localhost:3000'
+/* 你現在後端掛載點是 /api（不是 /api/v1） */
+window.API_PREFIX = '/api';
+
+/* 統一給所有前端腳本使用的 Base */
+window.API_BASE = (String(window.API_ORIGIN || '').replace(/\/+$/,'') +
+                   String(window.API_PREFIX || '/api').replace(/^\/?/, '/'));
+/* --------------------------------------------------------------- */

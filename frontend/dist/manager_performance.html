@@ -156,137 +156,27 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
                                 <i class="fal fa-angle-down"></i>
                             </a>
                         </div>
+                        <style>
+                            /* 角色群組預設收合；只有 .force-open 才展開（無視主題的 .open） */
+                            #js-nav-menu li[data-role]>ul
+                            {
+                                display: none !important;
+                            }
+
+                            #js-nav-menu li[data-role].force-open>ul
+                            {
+                                display: block !important;
+                            }
+
+                            /* 箭頭靠右（可選） */
+                            #js-nav-menu li[data-role]>a .collapse-sign
+                            {
+                                float: right;
+                            }
+
+                        </style>
                         <ul id="js-nav-menu" class="nav-menu" data-current-role="">
-                            <!-- 角色特定的儀表盤區域 -->
-                            <li class="nav-title role-based-title">角色儀表盤</li>
-                            <!-- 老闆儀表盤 -->
-                            <li class="role-nav-item boss-area" data-role="boss" id="boss-area-nav">
-                                <a href="#" title="老闆儀表盤" data-filter-tags="boss dashboard summary">
-                                    <i class="fal fa-crown"></i>
-                                    <span class="nav-link-text">老闆儀表盤</span>
-                                </a>
-                                <ul>
-                                    <li>
-                                        <a href="boss_dashboard.html" title="總覽畫面" data-filter-tags="boss dashboard summary">
-                                            <span class="nav-link-text" data-i18n="nav.dashboard_boss">總覽畫面</span>
-                                        </a>
-                                    </li>
-                                    <!-- 老闆碳信用交易模組 -->
-                                    <li>
-                                        <a href="boss_carbon_trading.html" title="碳信用交易模組" data-filter-tags="boss carbon trading">
-                                            <span class="nav-link-text">碳信用交易</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="boss_finance_report.html" title="财务绩效报表" data-filter-tags="boss carbon trading">
-                                            <span class="nav-link-text">财务绩效报表</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="boss_compliance_tracking.html" title="合規與驗證追蹤" data-filter-tags="boss carbon trading">
-                                            <span class="nav-link-text">合規與驗證追蹤</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="boss_risk_center.html" title="風險中心" data-filter-tags="boss carbon trading">
-                                            <span class="nav-link-text">風險中心</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="boss_staff_promotion.html" title="員工升級管理" data-filter-tags="boss employee promotion management">
-                                            <span class="nav-link-text">員工升級管理</span>
-                                        </a>
-                                </ul>
-                            </li>
-                            <!-- 主管儀表盤 -->
-                            <!--
-        			<li class="role-nav-item" data-role="manager" id="manager-dashboard-nav">
-        				<a href="manager_dashboard.html" title="主管儀表盤" data-filter-tags="manager dashboard monitor">
-        					<i class="fal fa-user-tie"></i>
-        					<span class="nav-link-text" data-i18n="nav.dashboard_manager">主管儀表盤</span>
-        				</a>
-        			</li>
-        			<!-- 主管專區 -->
-                            <li class="active open role-nav-item manager-area" data-role="manager" id="manager-area-nav">
-                                <a href="#" title="主管專區" data-filter-tags="manager area overview">
-                                    <i class="fal fa-analytics"></i>
-                                    <span class="nav-link-text">主管專區</span>
-                                </a>
-                                <ul>
-                                    <li>
-                                        <a href="manager_overview.html" title="總覽" data-filter-tags="manager overview dashboard">
-                                            <span class="nav-link-text">總覽</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="manager_monitor.html" title="即時異常監控" data-filter-tags="manager monitor realtime">
-                                            <span class="nav-link-text">即時異常監控</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="manager_check_schedule.html" title="排程管理" data-filter-tags="manager schedule management">
-                                            <span class="nav-link-text">排程管理</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="manager_carbon.html" title="碳排放概況" data-filter-tags="manager carbon emission">
-                                            <span class="nav-link-text">碳排放概況</span>
-                                        </a>
-                                    </li>
-                                    <li class="active">
-                                        <a href="manager_performance.html" title="部門績效" data-filter-tags="manager department performance kpi">
-                                            <span class="nav-link-text">部門績效</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="manager_resource.html" title="資源使用監測" data-filter-tags="manager resource efficiency">
-                                            <span class="nav-link-text">資源使用監測</span>
-                                        </a>
-                                    </li>
-                                </ul>
-                            </li>
-                            <!-- 員工儀表盤 -->
-                            <!--
-        			<li class="role-nav-item" data-role="staff" id="staff-dashboard-nav">
-        				<a href="staff_dashboard.html" title="員工儀表盤" data-filter-tags="staff dashboard operation">
-        					<i class="fal fa-user"></i>
-        					<span class="nav-link-text" data-i18n="nav.dashboard_staff">員工操作台</span>
-        				</a>
-        			</li>
-        			-->
-                            <li class="role-nav-item staff-area" data-role="staff" id="staff-area-nav">
-                                <a href="#" title="員工操作台" data-filter-tags="staff dashboard operation">
-                                    <i class="fal fa-analytics"></i>
-                                    <span class="nav-link-text">員工操作台</span>
-                                </a>
-                                <ul>
-                                    <li>
-                                        <a href="staff_device.html" title="設備管理" data-filter-tags="staff device management">
-                                            <span class="nav-link-text">設備管理</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="staff_issue.html" title="問題回報" data-filter-tags="staff issue report">
-                                            <span class="nav-link-text">問題回報</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="staff_energy.html" title="能源管理" data-filter-tags="staff energy management">
-                                            <span class="nav-link-text">能源管理</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="staff_schedule.html" title="排程管理" data-filter-tags="staff schedule management">
-                                            <span class="nav-link-text">排程管理</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="waste_management.html" title="廢棄物管理" data-filter-tags="waste management">
-                                            <span class="nav-link-text">廢棄物管理</span>
-                                        </a>
-                                    </li>
-                                </ul>
-                            </li>
+                            <li id="role-nav-anchor"></li>
                             <li>
                                 <a href="#" title="系統設定" data-filter-tags="theme settings">
                                     <i class="fal fa-cog"></i>
@@ -844,80 +734,7 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
                                 </ul>
                             </li>
                         </ul>
-                        <script>
-                            (function()
-                            {
-                                // 把 '1'|'2'|'3' 轉成人類可讀的 'staff'|'manager'|'boss'
-                                function normRole(r)
-                                {
-                                    var map = {
-                                        '1': 'staff',
-                                        '2': 'manager',
-                                        '3': 'boss'
-                                    };
-                                    return map[String(r)] || String(r || '');
-                                }
-
-                                // 先從快取拿（登入後 login.js 會寫 localStorage.userRole）
-                                function getCachedRole()
-                                {
-                                    return normRole(localStorage.getItem('userRole') || localStorage.getItem('currentRole'));
-                                }
-
-                                // 套用隱藏規則：只顯示屬於自己的角色群組（.role-nav-item[data-role]）
-                                function applyRoleNav(role)
-                                {
-                                    var nav = document.getElementById('js-nav-menu');
-                                    if (!nav) return;
-
-                                    var items = nav.querySelectorAll('.role-nav-item');
-                                    items.forEach(function(li)
-                                    {
-                                        var r = li.getAttribute('data-role');
-                                        li.style.display = (r === role) ? '' : 'none';
-                                    });
-
-                                    // 可選：沒有任何角色群組時，隱藏「角色儀表盤」標題
-                                    var title = nav.querySelector('.role-based-title');
-                                    if (title)
-                                    {
-                                        var anyVisible = Array.prototype.some.call(items, function(li)
-                                        {
-                                            return li.style.display !== 'none';
-                                        });
-                                        title.style.display = anyVisible ? '' : 'none';
-                                    }
-                                }
-
-                                // 主流程：DOMReady 後執行
-                                document.addEventListener('DOMContentLoaded', function()
-                                {
-                                    // 先用快取（無依賴、最即時）
-                                    var role = getCachedRole();
-                                    if (role) applyRoleNav(role);
-
-                                    // 若有載入 auth.js，則再用 /profile 矯正一次（避免快取過期）
-                                    if (window.Auth && typeof Auth.getCurrentUser === 'function')
-                                    {
-                                        Auth.getCurrentUser()
-                                            .then(function(me)
-                                            {
-                                                var realRole = normRole(me && me.role);
-                                                if (realRole)
-                                                {
-                                                    localStorage.setItem('userRole', realRole);
-                                                    applyRoleNav(realRole);
-                                                }
-                                            })
-                                            .catch(function()
-                                            {
-                                                /* 忽略，保留快取結果 */
-                                            });
-                                    }
-                                });
-                            })();
-
-                        </script>
+                        <script defer src="js/role-nav.js"></script>
                         <div class="filter-message js-filter-message bg-success-600"></div>
                     </nav>
                     <!-- END PRIMARY NAVIGATION -->

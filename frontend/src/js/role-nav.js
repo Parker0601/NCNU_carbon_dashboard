@@ -1,69 +1,74 @@
-// role-nav.js
+// js/role-nav.js
 (function () {
-  var OBSERVER_STARTED = false;
+  const API_BASE = 'http://localhost:3000/api';
+  const NAV_URL  = API_BASE + '/nav';
 
-  function normRole(r) {
-    var m = { '1': 'staff', '2': 'manager', '3': 'boss' };
-    return m[String(r)] || String(r || '');
+  function getToken() {
+    return localStorage.getItem('token') || localStorage.getItem('access_token') || '';
   }
 
-  function applyRoleNavHard(role) {
+  // 綁定群組開合（使用 .force-open，不跟主題搶 .open）
+  function bindRoleGroups(navRoot) {
+    var groups = navRoot.querySelectorAll('li[data-role]');
+    groups.forEach(function (li) {
+      var link = li.querySelector(':scope > a');
+      var submenu = li.querySelector(':scope > ul');
+      if (!link || !submenu) return;
+
+      // 補箭頭
+      if (!link.querySelector('.collapse-sign')) {
+        var b = document.createElement('b');
+        b.className = 'collapse-sign';
+        b.innerHTML = '<em class="fal fa-angle-down"></em>';
+        link.appendChild(b);
+      }
+
+      // 一律預設收起（**不管**主題是否幫你加了 .open）
+      li.classList.remove('force-open');
+      submenu.style.display = 'none';
+
+      // 點擊切換
+      link.addEventListener('click', function (e) {
+        e.preventDefault();
+        var opened = li.classList.toggle('force-open');
+        submenu.style.display = opened ? '' : 'none';
+        var em = link.querySelector('.collapse-sign em');
+        if (em) em.className = opened ? 'fal fa-angle-up' : 'fal fa-angle-down';
+      }, { passive: false });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
     var nav = document.getElementById('js-nav-menu');
     if (!nav) return;
+    var anchor = document.getElementById('role-nav-anchor');
 
-    var items = nav.querySelectorAll('.role-nav-item');
-    items.forEach(function (li) {
-      var r = li.getAttribute('data-role');
-      li.style.display = (r === role) ? '' : 'none';
-    });
+    var headers = {};
+    var token = getToken();
+    if (token) headers['Authorization'] = 'Bearer ' + token;
 
-    var title = nav.querySelector('.role-based-title');
-    if (title) {
-      var anyVisible = Array.prototype.some.call(items, function (li) {
-        return li.style.display !== 'none';
+    fetch(NAV_URL, { headers })
+      .then(function (res) {
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = 'page_login.html';
+          throw new Error('UNAUTH');
+        }
+        if (!res.ok) throw new Error('NAV_NOT_OK');
+        return res.text();
+      })
+      .then(function (html) {
+        if (anchor) {
+          anchor.insertAdjacentHTML('afterend', html);
+          anchor.remove();
+        } else {
+          nav.insertAdjacentHTML('afterbegin', html);
+        }
+        // 綁定並強制收合
+        bindRoleGroups(nav);
+      })
+      .catch(function () { /* 忽略其它錯誤，不導頁 */ })
+      .finally(function () {
+        nav.style.visibility = 'visible';
       });
-      title.style.display = anyVisible ? '' : 'none';
-    }
-  }
-
-  function startNavObserver(role) {
-    var nav = document.getElementById('js-nav-menu');
-    if (!nav || OBSERVER_STARTED) return;
-    OBSERVER_STARTED = true;
-
-    var mo = new MutationObserver(function () {
-      applyRoleNavHard(role);
-    });
-    mo.observe(nav, { childList: true, subtree: true, attributes: true });
-  }
-
-  window.addEventListener('load', async function () {
-    try {
-      if (typeof Auth?.ensureAuth !== 'function') {
-        console.error('[role-nav] Auth.ensureAuth 不可用，請確認 js/auth.js 已在 <head> 載入');
-        return;
-      }
-      await Auth.ensureAuth();
-      var me = await Auth.getCurrentUser();
-      var role = normRole(me && me.role);
-
-      if (role) {
-        document.documentElement.setAttribute('data-user-role', role);
-        localStorage.setItem('userRole', role);
-        applyRoleNavHard(role);
-        startNavObserver(role);
-      } else {
-        localStorage.removeItem('userRole');
-      }
-    } catch (e) {
-      // 未授權會被 auth.js 處理導回登入
-    } finally {
-      var nav = document.getElementById('js-nav-menu');
-      if (nav) nav.style.visibility = '';
-      document.body && document.body.setAttribute('data-loaded', 'true');
-    }
   });
-
-  // optional: 手動調用用於除錯
-  window.RoleNav = { apply: applyRoleNavHard, normRole };
 })();

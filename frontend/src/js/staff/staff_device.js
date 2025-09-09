@@ -1,353 +1,443 @@
-  // API 配置
-  const API_BASE_URL = 'http://localhost:3000/api';
-  const API_ENDPOINTS = {
-    devices: '/devices',
-    maintenance: '/maintenance',
-    carbon: '/carbon/my-data'
+(() => {
+  // ========= 基本設定 =========
+  const API_BASE = 'http://localhost:3000/api/devices';
+  const TOKEN_KEY = ['authToken', 'access_token', 'token']; // 你系統存 token 的 key，若不同請改這裡
+
+  // ========= 小工具 =========
+  const TOKEN_KEYS = ['authToken', 'access_token', 'token'];
+  const getToken = () => {
+    for (const k of TOKEN_KEYS) {
+      const t = localStorage.getItem(k);
+      if (t) return t;
+    }
+    return '';
+  };
+  const apiFetch = async (path, options = {}) => {
+    const headers = options.headers || {};
+    const token = getToken();
+    const res = await fetch(path, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        ...(options.body && !headers['Content-Type'] ? { 'Content-Type': 'application/json' } : {}),
+        ...headers,
+      },
+    });
+    let data = null;
+    try { data = await res.json(); } catch (_) {}
+    if (!res.ok || (data && data.success === false)) {
+      const msg = (data && (data.error || data.message)) || `${res.status} ${res.statusText}`;
+      throw new Error(msg);
+    }
+    return data;
   };
 
-  // 獲取認證token
-  function getAuthToken() {
-    return localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-  }
+  const toastSuccess = (msg) => Swal.fire({ icon: 'success', title: '成功', text: msg, timer: 1600, showConfirmButton: false });
+  const toastError = (msg)   => Swal.fire({ icon: 'error',   title: '錯誤', text: msg });
 
-  // API請求函數
-  async function apiRequest(endpoint, options = {}) {
-    const token = getAuthToken();
-    const defaultOptions = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` })
-      }
-    };
+  const fmtDateTime = (iso) => {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
 
-    try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...defaultOptions,
-        ...options
-      });
+  const hoursBetween = (a, b) => Math.max(0, (new Date(b) - new Date(a)) / 36e5);
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+  const statusMap = {
+    '1': { text: '正常運行', badge: 'badge-success' },
+    '2': { text: '維護中',   badge: 'badge-warning' },
+    '3': { text: '故障',     badge: 'badge-danger'  },
+  };
 
-      return await response.json();
-    } catch (error) {
-      console.error('API request failed:', error);
-      throw error;
-    }
-  }
+  // ========= DOM 參考 =========
+  const $deviceView   = document.getElementById('device-view');
+  const $reportView   = document.getElementById('report-view');
+  const $deviceList   = document.getElementById('device-list');
+  const $btnDevice    = document.getElementById('btn-device-view');
+  const $btnReport    = document.getElementById('btn-report-view');
+  const $btnRefresh   = document.getElementById('btn-refresh');
+  const $reportSel    = document.getElementById('report-selector');
+  const $reportBox    = document.getElementById('report-container');
 
-  // 獲取設備數據
-  async function fetchDevices() {
-    try {
-      // 如果後端API還沒實現，使用模擬數據
-      if (!getAuthToken()) {
-        return Promise.resolve([
-          { id: 1, name: "機台A", status: "normal", last_maintenance: "2024-06-01 10:00", runtime: "1200h" },
-          { id: 2, name: "機台B", status: "abnormal", last_maintenance: "2024-05-28 14:30", runtime: "800h" },
-          { id: 3, name: "機台C", status: "normal", last_maintenance: "2024-06-05 09:15", runtime: "1500h" }
-        ]);
-      }
+  // Modal 元件
+  const $maintenanceModal = document.getElementById('maintenanceModal');
+  const $deviceNameInput  = document.getElementById('deviceName');
+  const $maintenanceType  = document.getElementById('maintenanceType');
+  const $maintenanceDesc  = document.getElementById('maintenanceDescription');
+  const $maintenanceTime  = document.getElementById('maintenanceTime');
+  const $submitMaintenance= document.getElementById('submitMaintenance');
 
-      // 實際API調用
-      const response = await apiRequest(API_ENDPOINTS.devices);
-      return response.data || [];
-    } catch (error) {
-      console.error('Failed to fetch devices:', error);
-      // 顯示錯誤提示
-      Swal.fire({
-        icon: 'error',
-        title: '獲取設備數據失敗',
-        text: '請檢查網絡連接或聯繫管理員'
-      });
-      return [];
-    }
-  }
+  // 當前選中的設備（用於提交維護）
+  let currentDeviceForMaintenance = null;
 
-  // 提交維護記錄
-  async function submitMaintenanceRecord(data) {
-    try {
-      const response = await apiRequest(API_ENDPOINTS.maintenance, {
-        method: 'POST',
-        body: JSON.stringify(data)
-      });
-
-      Swal.fire({
-        icon: 'success',
-        title: '維護記錄提交成功',
-        text: '記錄已保存到系統'
-      });
-
-      return response;
-    } catch (error) {
-      console.error('Failed to submit maintenance record:', error);
-      Swal.fire({
-        icon: 'error',
-        title: '提交失敗',
-        text: '請檢查網絡連接或聯繫管理員'
-      });
-      throw error;
-    }
-  }
-
-  // 獲取碳排放數據（用於設備效率分析）
-  async function fetchCarbonData() {
-    try {
-      if (!getAuthToken()) {
-        return [];
-      }
-
-      const response = await apiRequest(API_ENDPOINTS.carbon);
-      return response.data || [];
-    } catch (error) {
-      console.error('Failed to fetch carbon data:', error);
-      return [];
-    }
-  }
-
-  function calcRuntimePercent(runtimeStr) {
-    const hours = parseInt(runtimeStr, 10) || 0;
-    const FULL_LOAD = 2000;
-    return Math.min(Math.round(hours / FULL_LOAD * 100), 100);
-  }
-
-  function renderDevices(devices) {
-    const $list = $('#device-list');
-    $list.empty();
-
-    if (devices.length === 0) {
-      $list.html('<div class="col-12 text-center"><p class="text-muted">暫無設備數據</p></div>');
+  // ========= 設備卡片渲染 =========
+  const renderDeviceCards = (devices) => {
+    $deviceList.innerHTML = '';
+    if (!devices || devices.length === 0) {
+      $deviceList.innerHTML = `<div class="col-12"><div class="alert alert-info mb-0">目前沒有設備。</div></div>`;
       return;
     }
 
-    devices.forEach(device => {
-      const statusColor = device.status === 'normal' ? 'bg-success-300' : 'bg-danger-300';
-      const statusText  = device.status === 'normal' ? '正常' : '異常';
+    const frag = document.createDocumentFragment();
 
-      const card = `
-        <div class="col-md-6 col-xl-4 mb-4">
-          <div class="card shadow border-0">
-            <div class="card-header d-flex justify-content-between align-items-center ${statusColor}">
-              <span class="fw-700 text-white">${device.name}</span>
-              <span class="badge ${device.status === 'normal' ? 'badge-success' : 'badge-danger'}">${statusText}</span>
+    devices.forEach((d) => {
+      const { id, name, status, bootTime, ratio } = d;
+      const s = statusMap[status] || { text: `未知(${status})`, badge: 'badge-secondary' };
+      const card = document.createElement('div');
+      card.className = 'col-12 col-md-6 col-lg-4 mb-3';
+      card.innerHTML = `
+        <div class="card h-100 shadow-sm">
+          <div class="card-body d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <h5 class="card-title mb-0">${name || '未命名設備'}</h5>
+              <span class="badge ${s.badge}">${s.text}</span>
             </div>
-            <div class="card-body text-center">
-              <div class="js-easy-pie-chart d-inline-flex align-items-center justify-content-center mb-3"
-                   data-percent="${calcRuntimePercent(device.runtime)}"
-                   data-linewidth="12" data-piesize="120" data-linecap="butt">
-                <span class="h4 m-0 fw-700"></span>
-              </div>
-              <p class="mb-2"><strong>運行時間：</strong>${device.runtime}</p>
-              <p class="mb-2"><strong>最後維護：</strong>${device.last_maintenance}</p>
-              <div class="mt-3">
-                <button class="btn btn-primary btn-sm btn-maintain" 
-                        data-id="${device.id}" 
-                        data-name="${device.name}">
-                  <i class="fal fa-tools"></i> 記錄維護
-                </button>
-              </div>
+            <div class="small text-muted mb-2">ID：${id}</div>
+            <ul class="list-unstyled mb-3">
+              <li>啟動時間：${fmtDateTime(bootTime)}</li>
+              <li>稼動率 (ratio)：${(ratio != null ? (ratio * 100).toFixed(1) : '-') }%</li>
+            </ul>
+            <div class="mt-auto d-flex gap-2">
+              <button class="btn btn-sm btn-outline-primary mr-2" data-action="history" data-id="${id}" data-name="${name}"><i class="fal fa-history"></i> 維護歷史</button>
+              <button class="btn btn-sm btn-outline-success" data-action="maint" data-id="${id}" data-name="${name}"><i class="fal fa-tools"></i> 新增維護</button>
             </div>
           </div>
         </div>
       `;
-      $list.append(card);
+      frag.appendChild(card);
     });
 
-    // 重新初始化圖表
-    $('.js-easy-pie-chart').each(function() {
-      $(this).easyPieChart({
-        barColor: $(this).data('barcolor') || '#1dc9b7',
-        trackColor: $(this).data('trackcolor') || '#e9ecef',
-        scaleColor: false,
-        lineCap: $(this).data('linecap') || 'butt',
-        lineWidth: $(this).data('linewidth') || 3,
-        size: $(this).data('piesize') || 110,
-        animate: 1000
-      });
-    });
-  }
+    $deviceList.appendChild(frag);
+  };
 
-  function showMaintenanceForm(deviceId, deviceName) {
-    $('#deviceName').val(deviceName);
-    $('#maintenanceTime').val(new Date().toISOString().slice(0, 16));
-    $('#maintenanceForm')[0].reset();
-    $('#maintenanceModal').modal('show');
-  }
-
-  function renderReport(type) {
-    const $container = $('#report-container');
-    $container.empty();
-
-    switch (type) {
-      case 'runtime':
-        const runtimeData = [
-          { name: '機台A', runtime: 1200 },
-          { name: '機台B', runtime: 800 },
-          { name: '機台C', runtime: 1500 }
-        ];
-        const canvas1 = document.createElement('canvas');
-        $container.append(canvas1);
-        new Chart(canvas1, {
-          type: 'bar',
-          data: {
-            labels: runtimeData.map(d => d.name),
-            datasets: [{
-              label: '運行時數',
-              data: runtimeData.map(d => d.runtime),
-              backgroundColor: 'rgba(54, 162, 235, 0.6)'
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              title: { display: true, text: '設備運行時數統計' }
-            }
-          }
-        });
-        break;
-
-      case 'status':
-        const statusData = [
-          { status: '正常', count: 2 },
-          { status: '異常', count: 1 }
-        ];
-        const canvas2 = document.createElement('canvas');
-        $container.append(canvas2);
-        new Chart(canvas2, {
-          type: 'pie',
-          data: {
-            labels: statusData.map(d => d.status),
-            datasets: [{
-              data: statusData.map(d => d.count),
-              backgroundColor: ['#1dc9b7', '#fd3995']
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              title: { display: true, text: '設備狀態分布' }
-            }
-          }
-        });
-        break;
-
-      case 'maintenance':
-        const maintenanceData = [
-          { name: '機台A', count: 3 },
-          { name: '機台B', count: 5 },
-          { name: '機台C', count: 2 }
-        ];
-        const canvas3 = document.createElement('canvas');
-        $container.append(canvas3);
-        new Chart(canvas3, {
-          type: 'bar',
-          data: {
-            labels: maintenanceData.map(d => d.name),
-            datasets: [{
-              label: '維護次數',
-              data: maintenanceData.map(d => d.count),
-              backgroundColor: 'rgba(255, 159, 64, 0.6)'
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              title: { display: true, text: '各設備維護次數' }
-            }
-          }
-        });
-        break;
-
-      case 'prediction':
-        const pred = [
-          { name: '機台A', runtime: 1200, last_maintenance: '2024-06-01 10:00' },
-          { name: '機台B', runtime: 800, last_maintenance: '2024-05-28 14:30' },
-          { name: '機台C', runtime: 1900, last_maintenance: '2024-06-05 09:15' }
-        ];
-        const predHtml = pred.map(d => {
-          const warn = d.runtime > 1800 ? '⚠️ 請安排維護' : '';
-          return `<div class="mb-2"><strong>${d.name}</strong>: ${d.runtime} 小時 (最後維護: ${d.last_maintenance}) ${warn}</div>`;
-        }).join('');
-        $container.html(predHtml);
-        break;
+  // ========= 載入資料 =========
+  const loadDeviceStatus = async () => {
+    try {
+      // 以「狀態列表」為主（所有角色可用）
+      const resp = await apiFetch(`${API_BASE}/status`, { method: 'GET' });
+      renderDeviceCards(resp.data || []);
+    } catch (err) {
+      toastError(`載入設備狀態失敗：${err.message}`);
     }
-  }
+  };
 
-  $(document).ready(function () {
-    // 初始載入
-    loadDeviceData();
-    renderReport('runtime');
+  // ========= 維護歷史 =========
+  const showDeviceMaintenanceHistory = async (deviceId, deviceName) => {
+    try {
+      const resp = await apiFetch(`${API_BASE}/${deviceId}/maintenance`, { method: 'GET' });
+      const rows = (resp.data || []).map(r => `
+        <tr>
+          <td>${fmtDateTime(r.recordCreateTime)}</td>
+          <td>${fmtDateTime(r.recordEndTime)}</td>
+          <td>${r.userName || '-'}</td>
+          <td>${r.recordDescription || '-'}</td>
+          <td><span class="badge ${ (statusMap[r.deviceStatus]?.badge || 'badge-secondary') }">${ statusMap[r.deviceStatus]?.text || r.deviceStatus }</span></td>
+        </tr>
+      `).join('');
 
-    // 刷新按鈕
-    $('#btn-refresh').on('click', function() {
-      loadDeviceData();
-    });
+      Swal.fire({
+        width: 900,
+        title: `維護歷史 - ${deviceName} (ID: ${deviceId})`,
+        html: `
+          <div class="table-responsive text-left">
+            <table class="table table-sm table-striped">
+              <thead>
+                <tr>
+                  <th>建立時間</th>
+                  <th>結束時間</th>
+                  <th>維修人員</th>
+                  <th>描述</th>
+                  <th>當時設備狀態</th>
+                </tr>
+              </thead>
+              <tbody>${rows || `<tr><td colspan="5" class="text-center text-muted">尚無紀錄</td></tr>`}</tbody>
+            </table>
+          </div>
+        `,
+        showConfirmButton: true,
+        confirmButtonText: '關閉',
+      });
+    } catch (err) {
+      toastError(`取得維護歷史失敗：${err.message}`);
+    }
+  };
 
-    // 切換視圖
-    $('#btn-device-view').on('click', function () {
-      $(this).addClass('active');
-      $('#btn-report-view').removeClass('active');
-      $('#device-view').show();
-      $('#report-view').hide();
-    });
+  // ========= 提交維護 =========
+  const openMaintenanceModal = (deviceId, deviceName) => {
+    currentDeviceForMaintenance = { id: deviceId, name: deviceName };
+    $deviceNameInput.value = deviceName || `設備 ${deviceId}`;
+    $maintenanceType.value = '';
+    $maintenanceDesc.value = '';
+    $maintenanceTime.value = new Date().toISOString().slice(0,16); // yyyy-MM-ddTHH:mm
+    // 顯示 Bootstrap modal
+    if (window.$) {
+      $('#maintenanceModal').modal('show');
+    } else {
+      // 後備方案
+      $maintenanceModal.style.display = 'block';
+      $maintenanceModal.classList.add('show');
+    }
+  };
 
-    $('#btn-report-view').on('click', function () {
-      $(this).addClass('active');
-      $('#btn-device-view').removeClass('active');
-      $('#device-view').hide();
-      $('#report-view').show();
-      renderReport($('#report-selector').val());
-    });
-
-    // 報表下拉變更
-    $('#report-selector').on('change', function () {
-      renderReport($(this).val());
-    });
-
-    // 維護按鈕事件
-    $(document).on('click', '.btn-maintain', function () {
-      const deviceId = $(this).data('id');
-      const deviceName = $(this).data('name');
-      showMaintenanceForm(deviceId, deviceName);
-    });
-
-    // 提交維護記錄
-    $('#submitMaintenance').on('click', async function() {
-      const form = $('#maintenanceForm')[0];
-      if (!form.checkValidity()) {
-        form.reportValidity();
+  const submitMaintenance = async () => {
+    try {
+      if (!currentDeviceForMaintenance) {
+        toastError('沒有選定設備。');
         return;
       }
+      const deviceId = currentDeviceForMaintenance.id;
+      const name = currentDeviceForMaintenance.name || `設備 ${deviceId}`;
+      const type = $maintenanceType.value;
+      const desc = $maintenanceDesc.value.trim();
+      const endTimeLocal = $maintenanceTime.value;
 
-      const maintenanceData = {
-        deviceId: $('#deviceName').val(),
-        type: $('#maintenanceType').val(),
-        description: $('#maintenanceDescription').val(),
-        maintenanceTime: $('#maintenanceTime').val(),
-        userId: localStorage.getItem('userID') || 'unknown'
+      if (!type) return toastError('請選擇維護類型');
+      if (!desc) return toastError('請填寫維護描述');
+      if (!endTimeLocal) return toastError('請選擇維護時間');
+
+      // 把「維護類型」合併到描述（API 只有 description 欄位）
+      const finalDesc = `[${type}] ${desc}`;
+
+      const payload = {
+        deviceId: Number(deviceId),
+        name,
+        description: finalDesc,
+        endTime: new Date(endTimeLocal).toISOString(),
       };
 
-      try {
-        await submitMaintenanceRecord(maintenanceData);
+      const resp = await apiFetch(`${API_BASE}/maintenance`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      // 關閉 modal
+      if (window.$) {
         $('#maintenanceModal').modal('hide');
-        // 重新載入設備數據
-        loadDeviceData();
-      } catch (error) {
-        console.error('Failed to submit maintenance record:', error);
+      } else {
+        $maintenanceModal.classList.remove('show');
+        $maintenanceModal.style.display = 'none';
+      }
+
+      toastSuccess(resp.message || '維護紀錄已建立');
+      // 重新載入設備狀態（維護可能會影響狀態）
+      loadDeviceStatus();
+    } catch (err) {
+      toastError(`提交維護失敗：${err.message}`);
+    }
+  };
+
+  // ========= 報表（Chart.js） =========
+  let currentChart = null;
+
+  const destroyChartIfAny = () => {
+    if (currentChart) {
+      currentChart.destroy();
+      currentChart = null;
+    }
+  };
+
+  const ensureReportCanvas = () => {
+    $reportBox.innerHTML = '<canvas id="report-canvas" height="400"></canvas>';
+    return document.getElementById('report-canvas').getContext('2d');
+  };
+
+  // 1) 運行時數統計（以 bootTime ~ 現在 的小時數 * ratio 作為近似）
+  const renderRuntimeChart = async () => {
+    const ctx = ensureReportCanvas();
+    const { data: devices } = await apiFetch(`${API_BASE}`, { method: 'GET' }).catch(async (e) => {
+      // 若非 admin 取不到 /api/devices，就退而求其次用 /status（無 bootTime/ratio 就顯示不了）
+      const fallback = await apiFetch(`${API_BASE}/status`, { method: 'GET' });
+      return { data: (fallback.data || []).map(d => ({ ...d, bootTime: null, ratio: null })) };
+    });
+
+    const now = new Date();
+    const labels = [];
+    const values = [];
+
+    (devices || []).forEach(d => {
+      labels.push(d.name || `設備${d.id}`);
+      if (d.bootTime && (d.ratio != null)) {
+        const hrs = hoursBetween(d.bootTime, now) * Number(d.ratio || 1);
+        values.push(Math.max(0, Math.round(hrs)));
+      } else {
+        values.push(0);
       }
     });
+
+    destroyChartIfAny();
+    currentChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ label: '估算運行時數(小時)', data: values }],
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: true }, title: { display: false } },
+        scales: { y: { beginAtZero: true } },
+      },
+    });
+  };
+
+  // 2) 設備狀態分布
+  const renderStatusPie = async () => {
+    const ctx = ensureReportCanvas();
+    const { data: statuses } = await apiFetch(`${API_BASE}/status`, { method: 'GET' });
+    const counts = { '1': 0, '2': 0, '3': 0 };
+    (statuses || []).forEach(s => counts[s.status] = (counts[s.status] || 0) + 1);
+
+    destroyChartIfAny();
+    currentChart = new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: ['正常運行', '維護中', '故障'],
+        datasets: [{ data: [counts['1'] || 0, counts['2'] || 0, counts['3'] || 0] }],
+      },
+      options: { responsive: true }
+    });
+  };
+
+  // 3) 維護紀錄次數統計（依設備彙總）
+  const renderMaintenanceCount = async () => {
+    const ctx = ensureReportCanvas();
+    const { data: history } = await apiFetch(`${API_BASE}/maintenance-history`, { method: 'GET' });
+    const countByDevice = {};
+    (history || []).forEach(r => {
+      const key = `${r.deviceId}::${r.deviceName}`;
+      countByDevice[key] = (countByDevice[key] || 0) + 1;
+    });
+    const labels = Object.keys(countByDevice).map(k => k.split('::')[1] || k);
+    const values = Object.values(countByDevice);
+
+    destroyChartIfAny();
+    currentChart = new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets: [{ label: '維護次數', data: values }] },
+      options: { responsive: true, scales: { y: { beginAtZero: true } } }
+    });
+  };
+
+  // 4) 平均運行時間與預測維護（簡易近似：相鄰維護記錄的平均間隔）
+  const renderPrediction = async () => {
+    const ctx = ensureReportCanvas();
+    const { data: history } = await apiFetch(`${API_BASE}/maintenance-history`, { method: 'GET' });
+
+    // 依設備分組並按時間排序
+    const byDevice = {};
+    (history || []).forEach(r => {
+      const key = `${r.deviceId}::${r.deviceName}`;
+      byDevice[key] = byDevice[key] || [];
+      byDevice[key].push(r);
+    });
+    Object.values(byDevice).forEach(list => list.sort((a,b) => new Date(a.recordEndTime) - new Date(b.recordEndTime)));
+
+    const labels = [];
+    const avgDays = [];
+    const nextDays = [];
+
+    for (const key of Object.keys(byDevice)) {
+      const [id, name] = key.split('::');
+      const list = byDevice[key];
+      const gaps = [];
+      for (let i = 1; i < list.length; i++) {
+        const gapHrs = hoursBetween(list[i-1].recordEndTime || list[i-1].recordCreateTime, list[i].recordEndTime || list[i].recordCreateTime);
+        gaps.push(gapHrs / 24);
+      }
+      const avg = gaps.length ? (gaps.reduce((a,b)=>a+b,0) / gaps.length) : 0;
+      labels.push(name || `設備${id}`);
+      avgDays.push(Number(avg.toFixed(1)));
+
+      // 預測下一次 = 最後一次結束時間 + 平均間隔
+      let nextGap = avg || 0;
+      nextDays.push(Number(nextGap.toFixed(1)));
+    }
+
+    destroyChartIfAny();
+    currentChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: '平均維護間隔(天)', data: avgDays },
+          { label: '預測下次維護間隔(天)', data: nextDays },
+        ]
+      },
+      options: { responsive: true, scales: { y: { beginAtZero: true } } }
+    });
+  };
+
+  const renderReport = async () => {
+    try {
+      const sel = $reportSel.value;
+      if (sel === 'runtime')      return renderRuntimeChart();
+      if (sel === 'status')       return renderStatusPie();
+      if (sel === 'maintenance')  return renderMaintenanceCount();
+      if (sel === 'prediction')   return renderPrediction();
+    } catch (err) {
+      toastError(`載入報表失敗：${err.message}`);
+    }
+  };
+
+  // ========= 事件掛載 =========
+  // 切換視圖
+  $btnDevice?.addEventListener('click', () => {
+    $btnDevice.classList.add('active');
+    $btnReport.classList.remove('active');
+    $deviceView.style.display = '';
+    $reportView.style.display = 'none';
   });
 
-  // 載入設備數據
-  async function loadDeviceData() {
-    try {
-      const devices = await fetchDevices();
-      renderDevices(devices);
-    } catch (error) {
-      console.error('Failed to load device data:', error);
+  $btnReport?.addEventListener('click', async () => {
+    $btnReport.classList.add('active');
+    $btnDevice.classList.remove('active');
+    $deviceView.style.display = 'none';
+    $reportView.style.display = '';
+    await renderReport();
+  });
+
+  // 刷新
+  $btnRefresh?.addEventListener('click', async () => {
+    if ($deviceView.style.display !== 'none') {
+      await loadDeviceStatus();
+    } else {
+      await renderReport();
     }
+    toastSuccess('已刷新');
+  });
+
+  // 報表選擇
+  $reportSel?.addEventListener('change', renderReport);
+
+  // 卡片按鈕（事件委派）
+  $deviceList?.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const action = btn.getAttribute('data-action');
+    const id = btn.getAttribute('data-id');
+    const name = btn.getAttribute('data-name');
+
+    if (action === 'history') {
+      showDeviceMaintenanceHistory(id, name);
+    } else if (action === 'maint') {
+      openMaintenanceModal(id, name);
+    }
+  });
+
+  // 提交維護
+  $submitMaintenance?.addEventListener('click', submitMaintenance);
+
+  // ========= 初始化 =========
+  const init = async () => {
+    // 初始化先顯示設備卡片
+    await loadDeviceStatus();
+  };
+
+  // DOM ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
   }
+
+})();

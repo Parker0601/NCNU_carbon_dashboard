@@ -1,54 +1,61 @@
-// src/js/logout.js
-console.log('logout.js loaded');
+console.log('register.js loaded');
 
 (function () {
-  // 與 register.js 同一風格
-  const API_BASE    = 'http://localhost:3000/api';
-  const STORAGE_KEY = 'access_token';
-  const ROLE_KEYS   = ['userRole', 'currentRole'];
-  const LOGIN_PAGE  = '/page_login';
+  const API_BASE = 'http://localhost:3000/api'; // 後端 API
 
-  // 清本地登入狀態
-  function clearLocalAuth() {
-    try { localStorage.removeItem(STORAGE_KEY); } catch {}
-    ROLE_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch {} });
-    document.documentElement && document.documentElement.removeAttribute('data-user-role');
-  }
+  const $form = $('#js-register');
+  const $btn  = $('#js-register-btn');
 
-  // 發出後端登出
-  async function callApiLogout() {
-    const token = localStorage.getItem(STORAGE_KEY);
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = 'Bearer ' + token;
-
-    // 無論成功/失敗都不阻擋後續清除與導頁
-    try {
-      await fetch(`${API_BASE}/auth/logout`, {
-        method: 'POST',
-        headers,
-        // 如果你的後端還用 cookie/session，可開下面這行：
-        // credentials: 'include',
-      });
-    } catch (e) {
-      console.warn('logout API failed (ignored):', e);
-    }
-  }
-
-  // 事件處理：支援任何帶 data-action="logout" 或 id="btn-logout" 的元素
-  $(document).on('click', '#btn-logout, [data-action="logout"]', async function (e) {
+  $btn.on('click', async function (e) {
     e.preventDefault();
-    e.stopPropagation();
 
-    // 防重複點擊
-    const $el = $(this);
-    if ($el.data('logoutPending')) return;
-    $el.data('logoutPending', true);
+    if (!$form[0].checkValidity()) {
+      e.stopPropagation();
+      $form.addClass('was-validated');
+      return;
+    }
+
+    const name  = $('#name').val().trim();
+    const email = $('#mail').val().trim();
+    const pwd   = $('#userpassword').val();
+    const pwd2  = $('#userpassword2').val();
+
+    if (pwd !== pwd2) {
+      $form.addClass('was-validated');
+      alert('兩次輸入的密碼不一致');
+      return;
+    }
+
+    const payload = {
+      name,
+      email,
+      password: pwd,
+      confirmPassword: pwd2,
+      role: '1',
+    };
+
+    $btn.prop('disabled', true);
 
     try {
-      await callApiLogout();
+      const resp = await fetch(`${API_BASE}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data?.success === false) {
+        throw new Error(data?.message || `${resp.status} ${resp.statusText}`);
+      }
+      alert(data?.message || '註冊成功，請前往登入');
+      $form[0].reset();
+      $form.removeClass('was-validated');
+      // window.location.href = 'page_login.html';
+    } catch (err) {
+      console.error(err);
+      alert(err.message || '註冊失敗');
     } finally {
-      clearLocalAuth();
-      window.location.href = LOGIN_PAGE;  // 與你的路由一致：/page_login
+      $btn.prop('disabled', false);
+      $form.addClass('was-validated');
     }
   });
 })();

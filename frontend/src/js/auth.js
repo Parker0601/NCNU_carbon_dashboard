@@ -3,7 +3,7 @@
 // ==============================
 
 (function () {
-  const API_BASE = '/api/v1/auth';
+  const API_BASE = '/api/auth';
   const PROFILE_ENDPOINT = '/profile';
   const LOGIN_PAGE = '/page_login';
   const FORBIDDEN_PAGE = '/403';
@@ -27,7 +27,17 @@
 
   function getToken() { return localStorage.getItem(STORAGE_KEY); }
   function setToken(t) { localStorage.setItem(STORAGE_KEY, t); }
-  function clearToken() { localStorage.removeItem(STORAGE_KEY); }
+  function clearToken()  {
+    [
+      'access_token',
+      'token',
+      'user',
+      'userRole',
+      'currentRole',
+      'userName',
+      'userID'
+    ].forEach(k => { try { localStorage.removeItem(k); } catch {} });
+  }
 
   window.addEventListener('storage', (e) => {
     if (e.key === STORAGE_KEY && !e.newValue && location.pathname !== LOGIN_PAGE) {

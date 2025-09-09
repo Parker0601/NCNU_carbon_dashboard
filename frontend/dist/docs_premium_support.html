@@ -52,7 +52,7 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
         <link rel="stylesheet" media="screen, print" href="css/theme-demo.css">
     </head>
     <!-- BEGIN Body -->
-    <body class="mod-bg-1 mod-nav-link ">
+    <body class="mod-bg-1 mod-nav-link " data-required-roles="">
         <!-- DOC: script to save and load page settings -->
         <script>
             /**
@@ -1421,8 +1421,7 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
                                             <a href="#?lang=ch" class="dropdown-item" data-action="lang" data-lang="ch">中文</a>
                                         </div>
                                     </div>
-                                    <div class="dropdown-divider m-0"></div>
-                                    <a class="dropdown-item fw-500 pt-3 pb-3" href="page_login.html">
+                                    <a class="dropdown-item fw-500 pt-3 pb-3" href="#" data-action="logout">
                                         <span data-i18n="drpdwn.page-logout">Logout</span>
                                         <span class="float-right fw-n">&commat;codexlantern</span>
                                     </a>
@@ -1619,7 +1618,7 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
             <a href="#" class="menu-item btn" data-toggle="tooltip" data-placement="left" title="Scroll Top">
                 <i class="fal fa-arrow-up"></i>
             </a>
-            <a href="page_login.html" class="menu-item btn" data-toggle="tooltip" data-placement="left" title="Logout">
+            <a href="#" class="menu-item btn" data-toggle="tooltip" data-placement="left" title="Logout" data-action="logout">
                 <i class="fal fa-sign-out"></i>
             </a>
             <a href="#" class="menu-item btn" data-action="app-fullscreen" data-toggle="tooltip" data-placement="left" title="Full Screen">
@@ -2295,6 +2294,8 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
     				+ src/../jquery-snippets.js (core) -->
         <script src="js/vendors.bundle.js"></script>
         <script src="js/app.bundle.js"></script>
+        <!-- 固定載入 logout.js，避免被覆蓋 -->
+        <script src="js/logout.js" defer></script>
     </body>
     <!-- END Body -->
 </html>

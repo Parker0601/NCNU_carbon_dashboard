@@ -49,9 +49,9 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
         <link rel="apple-touch-icon" sizes="180x180" href="img/favicon/apple-touch-icon.png">
         <link rel="icon" type="image/png" sizes="32x32" href="img/favicon/favicon-32x32.png">
         <link rel="mask-icon" href="img/favicon/safari-pinned-tab.svg" color="#5bbad5">
-        <!-- 1) 全站認證工具 -->
+        <!-- 1) 全站認證工具（只載一次） -->
         <script src="js/auth.js"></script>
-        <!-- 2) ultra-early：快取角色避免閃爍 -->
+        <!-- 2) ultra-early：從快取角色避免閃爍 -->
         <script>
             (function()
             {
@@ -92,11 +92,65 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
             }
 
         </style>
-        <!-- 4) 你原本的 page-settings 與 manager-nav -->
-        <script src="js/manager-nav.js"></script>
+        <!-- 4) 需要的其他 head 資源（若有） -->
+        <!-- 5) 提前執行 ensureAuth，通過後解除防閃 -->
+        <script>
+            (async function()
+            {
+                var PUBLIC_PAGES = ['/page_login', '/page_register', '/403', '/404'];
+
+                if (PUBLIC_PAGES.includes(location.pathname))
+                {
+                    document.body && document.body.setAttribute('data-loaded', 'true');
+                    var m = document.getElementById('js-nav-menu');
+                    if (m && m.style) m.style.visibility = 'visible';
+                    return;
+                }
+
+                function getRequiredRoles()
+                {
+                    var rr = (document.body && document.body.getAttribute('data-required-roles')) || '';
+                    return rr.split(',').map(function(s)
+                    {
+                        return s.trim();
+                    }).filter(Boolean);
+                }
+
+                function showNav()
+                {
+                    document.body && document.body.setAttribute('data-loaded', 'true');
+                    var menu = document.getElementById('js-nav-menu');
+                    if (menu && menu.style) menu.style.visibility = 'visible';
+                }
+
+                try
+                {
+                    var tries = 0;
+                    while (!(window.Auth && typeof Auth.ensureAuth === 'function') && tries < 10)
+                    {
+                        await new Promise(function(r)
+                        {
+                            setTimeout(r, 10);
+                        });
+                        tries++;
+                    }
+                    var requiredRoles = getRequiredRoles();
+                    if (window.Auth && typeof Auth.ensureAuth === 'function')
+                    {
+                        await Auth.ensureAuth(requiredRoles);
+                    }
+                    showNav();
+                }
+                catch (e)
+                {
+                    console.warn('ensureAuth early init error:', e);
+                }
+            })();
+
+        </script>
     </head>
     <!-- BEGIN Body -->
-    <body class="mod-bg-1 mod-nav-link ">
+    <body class="mod-bg-1 mod-nav-link " data-required-roles="">
         <!-- DOC: script to save and load page settings -->
         <script>
             /**
@@ -1465,8 +1519,7 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
                                             <a href="#?lang=ch" class="dropdown-item" data-action="lang" data-lang="ch">中文</a>
                                         </div>
                                     </div>
-                                    <div class="dropdown-divider m-0"></div>
-                                    <a class="dropdown-item fw-500 pt-3 pb-3" href="page_login.html">
+                                    <a class="dropdown-item fw-500 pt-3 pb-3" href="#" data-action="logout">
                                         <span data-i18n="drpdwn.page-logout">Logout</span>
                                         <span class="float-right fw-n">&commat;codexlantern</span>
                                     </a>
@@ -1645,7 +1698,7 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
             <a href="#" class="menu-item btn" data-toggle="tooltip" data-placement="left" title="Scroll Top">
                 <i class="fal fa-arrow-up"></i>
             </a>
-            <a href="page_login.html" class="menu-item btn" data-toggle="tooltip" data-placement="left" title="Logout">
+            <a href="#" class="menu-item btn" data-toggle="tooltip" data-placement="left" title="Logout" data-action="logout">
                 <i class="fal fa-sign-out"></i>
             </a>
             <a href="#" class="menu-item btn" data-action="app-fullscreen" data-toggle="tooltip" data-placement="left" title="Full Screen">
@@ -2321,6 +2374,8 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
     				+ src/../jquery-snippets.js (core) -->
         <script src="js/vendors.bundle.js"></script>
         <script src="js/app.bundle.js"></script>
+        <!-- 固定載入 logout.js，避免被覆蓋 -->
+        <script src="js/logout.js" defer></script>
     </body>
     <!-- END Body -->
 </html>

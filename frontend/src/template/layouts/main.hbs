@@ -5,10 +5,10 @@
     {{> include/_head}}
 
     {{#> head-block}}
-      <!-- 1) 全站認證工具 -->
+      <!-- 1) 全站認證工具（只載一次） -->
       <script src="js/auth.js"></script>
 
-      <!-- 2) ultra-early：快取角色避免閃爍 -->
+      <!-- 2) ultra-early：從快取角色避免閃爍 -->
       <script>
         (function () {
           var cached = localStorage.getItem('userRole') || localStorage.getItem('currentRole');
@@ -31,15 +31,55 @@
         #js-nav-menu { visibility: hidden !important; }
       </style>
 
-      <!-- 4) 你原本的 page-settings 與 manager-nav -->
+      <!-- 4) 需要的其他 head 資源（若有） -->
       {{#each page-settings.js}}
         <script src="{{this}}"></script>
       {{/each}}
-      <script src="js/manager-nav.js"></script>
+
+      <!-- 5) 提前執行 ensureAuth，通過後解除防閃 -->
+      <script>
+        (async function () {
+          var PUBLIC_PAGES = ['/page_login', '/page_register', '/403', '/404'];
+
+          if (PUBLIC_PAGES.includes(location.pathname)) {
+            document.body && document.body.setAttribute('data-loaded', 'true');
+            var m = document.getElementById('js-nav-menu');
+            if (m && m.style) m.style.visibility = 'visible';
+            return;
+          }
+
+          function getRequiredRoles() {
+            var rr = (document.body && document.body.getAttribute('data-required-roles')) || '';
+            return rr.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+          }
+
+          function showNav() {
+            document.body && document.body.setAttribute('data-loaded', 'true');
+            var menu = document.getElementById('js-nav-menu');
+            if (menu && menu.style) menu.style.visibility = 'visible';
+          }
+
+          try {
+            var tries = 0;
+            while (!(window.Auth && typeof Auth.ensureAuth === 'function') && tries < 10) {
+              await new Promise(function (r) { setTimeout(r, 10); });
+              tries++;
+            }
+            var requiredRoles = getRequiredRoles();
+            if (window.Auth && typeof Auth.ensureAuth === 'function') {
+              await Auth.ensureAuth(requiredRoles);
+            }
+            showNav();
+          } catch (e) {
+            console.warn('ensureAuth early init error:', e);
+          }
+        })();
+      </script>
     {{/head-block}}
   </head>
+
   <!-- BEGIN Body -->
-  <body class="mod-bg-1 mod-nav-link {{preemptiveclass}}">
+  <body class="mod-bg-1 mod-nav-link {{preemptiveclass}}" data-required-roles="{{requiredRoles}}">
     
     {{!-- save-settings-script --}}
     {{> include/_scripts-loading-saving}}
@@ -87,8 +127,11 @@
     {{!-- 先載入 SmartAdmin bundles --}}
     {{> include/_scripts-base-plugins}}
 
+    <!-- 固定載入 logout.js，避免被覆蓋 -->
+    <script src="js/logout.js" defer></script>
+
     {{#>scripts-block}}
-      {{!-- Custom scripts per page can be added. --}}
+      {{> @partial-block}}
     {{/scripts-block}}
   </body>
   <!-- END Body -->

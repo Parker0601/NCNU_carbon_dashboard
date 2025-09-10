@@ -5,8 +5,8 @@ import { db } from '@/db';
 import { users } from '@/db/schema';
 import { hashPassword, comparePassword } from '@/utils/passwords';
 import { successResponse, errorResponse } from '@/utils/responses';
-import { loginSchema, registerSchema, forgetPasswordSchema, resetPasswordSchema } from '@/validators/auth.validator';
-import { authenticateToken } from '@/middleware/auth';
+import { loginSchema, registerSchema } from '@/validators/auth.validator';
+import { authenticateToken, requireRole, USER_ROLES } from '@/middleware/auth';
 import { env } from '@/config/env';
 
 const router = Router();
@@ -27,13 +27,13 @@ router.post('/register', async (req: Request, res: Response) => {
     // 3. 加密密碼
     const hashedPassword = await hashPassword(validatedData.password);
 
-    // 4. 創建用戶
+    // 4. 創建用戶 - 新註冊用戶默認為員工角色
     const [newUser] = await db
       .insert(users)
       .values({
         name: validatedData.name,
         password: hashedPassword,
-        role: validatedData.role,
+        role: USER_ROLES.EMPLOYEE, // 默認為員工角色
         mail: validatedData.email,
         createTime: new Date(),
       })
@@ -143,7 +143,8 @@ router.get('/profile', authenticateToken, async (req: Request, res: Response) =>
   }
 });
 
-// Forget password endpoint
+// Forget password endpoint - 暫時註解掉此功能
+/*
 router.post('/forget-password', async (req: Request, res: Response) => {
   try {
     // 1. 數據驗證
@@ -188,28 +189,26 @@ router.post('/forget-password', async (req: Request, res: Response) => {
     return errorResponse(res, 'Failed to process password reset request', 500);
   }
 });
+*/
 
-// Reset password endpoint
+// Reset password endpoint - 修改為使用email確認用戶
 router.post('/reset-password', async (req: Request, res: Response) => {
   try {
-    // 1. 數據驗證
-    const validatedData = resetPasswordSchema.parse(req.body);
+    // 1. 數據驗證 - 需要email、新密碼和確認密碼
+    const { email, newPassword, confirmPassword } = req.body;
     
-    // 2. 驗證重置token
-    if (!env.JWT_SECRET) {
-      return errorResponse(res, 'JWT secret not configured', 500);
+    if (!email || !newPassword || !confirmPassword) {
+      return errorResponse(res, 'Email, new password and confirm password are required', 400);
     }
 
-    let decoded;
-    try {
-      decoded = (jwt as any).verify(validatedData.token, env.JWT_SECRET) as any;
-    } catch (error) {
-      return errorResponse(res, 'Invalid or expired reset token', 400);
+    // 2. 檢查密碼是否一致
+    if (newPassword !== confirmPassword) {
+      return errorResponse(res, 'Passwords do not match', 400);
     }
 
-    // 3. 檢查token類型
-    if (decoded.type !== 'password_reset') {
-      return errorResponse(res, 'Invalid token type', 400);
+    // 3. 檢查密碼長度（可選，建議至少6位）
+    if (newPassword.length < 6) {
+      return errorResponse(res, 'Password must be at least 6 characters long', 400);
     }
 
     // 4. 檢查用戶是否存在
@@ -217,16 +216,17 @@ router.post('/reset-password', async (req: Request, res: Response) => {
       .select({
         id: users.id,
         mail: users.mail,
+        name: users.name,
       })
       .from(users)
-      .where(eq(users.id, decoded.id));
+      .where(eq(users.mail, email));
 
     if (!user) {
-      return errorResponse(res, 'User not found', 404);
+      return errorResponse(res, 'User not found with this email', 404);
     }
 
     // 5. 加密新密碼
-    const hashedPassword = await hashPassword(validatedData.newPassword);
+    const hashedPassword = await hashPassword(newPassword);
 
     // 6. 更新密碼
     await db
@@ -234,9 +234,16 @@ router.post('/reset-password', async (req: Request, res: Response) => {
       .set({
         password: hashedPassword,
       })
-      .where(eq(users.id, decoded.id));
+      .where(eq(users.id, user.id));
 
-    return successResponse(res, { message: 'Password updated successfully' }, 'Password reset successful');
+    return successResponse(res, { 
+      message: 'Password updated successfully',
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.mail
+      }
+    }, 'Password reset successful');
   } catch (error) {
     if (error instanceof Error) {
       return errorResponse(res, error.message, 400);
@@ -258,6 +265,109 @@ router.post('/logout', authenticateToken, async (req: Request, res: Response) =>
     return successResponse(res, { message: 'Logged out successfully' }, 'Logout successful');
   } catch (error) {
     return errorResponse(res, 'Failed to logout', 500);
+  }
+});
+
+// ===========================================
+// 老闆專用功能：員工升級管理
+// ===========================================
+
+// 獲取所有員工列表 (僅限老闆)
+router.get('/employees', authenticateToken, requireRole([USER_ROLES.BOSS]), async (_req: Request, res: Response) => {
+  try {
+    // 獲取所有員工（不包括老闆自己）
+    const employees = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        mail: users.mail,
+        role: users.role,
+        createTime: users.createTime,
+      })
+      .from(users)
+      .where(eq(users.role, USER_ROLES.EMPLOYEE)); // 只顯示員工
+
+    return successResponse(res, employees, 'Employees retrieved successfully');
+  } catch (error) {
+    return errorResponse(res, 'Failed to get employees', 500);
+  }
+});
+
+// 升級員工角色 (僅限老闆)
+router.put('/upgrade/:userId', authenticateToken, requireRole([USER_ROLES.BOSS]), async (req: Request, res: Response) => {
+  try {
+    const userId = parseInt(req.params['userId'] || '0');
+    const { newRole } = req.body;
+
+    // 驗證新角色
+    if (!newRole || !Object.values(USER_ROLES).includes(newRole)) {
+      return errorResponse(res, 'Invalid role. Valid roles are: 1 (Employee), 2 (Manager), 3 (Boss)', 400);
+    }
+
+    // 檢查用戶是否存在且為員工
+    const [user] = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        mail: users.mail,
+        role: users.role,
+      })
+      .from(users)
+      .where(eq(users.id, userId));
+
+    if (!user) {
+      return errorResponse(res, 'User not found', 404);
+    }
+
+    if (user.role !== USER_ROLES.EMPLOYEE) {
+      return errorResponse(res, 'Can only upgrade employees', 400);
+    }
+
+    // 更新用戶角色
+    const [updatedUser] = await db
+      .update(users)
+      .set({
+        role: newRole,
+      })
+      .where(eq(users.id, userId))
+      .returning({
+        id: users.id,
+        name: users.name,
+        mail: users.mail,
+        role: users.role,
+      });
+
+    return successResponse(res, {
+      user: updatedUser,
+      message: `User ${updatedUser.name} has been upgraded to ${newRole === USER_ROLES.MANAGER ? 'Manager' : 'Boss'}`
+    }, 'User upgraded successfully');
+  } catch (error) {
+    if (error instanceof Error) {
+      return errorResponse(res, error.message, 400);
+    }
+    return errorResponse(res, 'Failed to upgrade user', 500);
+  }
+});
+
+// 獲取角色統計 (僅限老闆)
+router.get('/role-stats', authenticateToken, requireRole([USER_ROLES.BOSS]), async (_req: Request, res: Response) => {
+  try {
+    const allUsers = await db
+      .select({
+        role: users.role,
+      })
+      .from(users);
+
+    const stats = {
+      total: allUsers.length,
+      employees: allUsers.filter(u => u.role === USER_ROLES.EMPLOYEE).length,
+      managers: allUsers.filter(u => u.role === USER_ROLES.MANAGER).length,
+      bosses: allUsers.filter(u => u.role === USER_ROLES.BOSS).length,
+    };
+
+    return successResponse(res, stats, 'Role statistics retrieved successfully');
+  } catch (error) {
+    return errorResponse(res, 'Failed to get role statistics', 500);
   }
 });
 

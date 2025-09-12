@@ -31,10 +31,21 @@
 							<div class="card p-4 rounded-plus bg-faded">
 								<h2 class="mb-4">重設密碼</h2>
 								<form id="js-reset-form" novalidate>
+									<div id="js-reset-alert" class="alert" role="alert" style="display:none"></div>
+									<div class="form-group">
+										<label class="form-label" for="email">註冊 Email</label>
+										<input type="email" id="email" class="form-control" placeholder="請輸入您的 Email" required>
+										<div class="invalid-feedback">請輸入有效的電子郵件格式</div>
+									</div>
 									<div class="form-group">
 										<label class="form-label" for="new-password">新密碼</label>
-										<input type="password" id="new-password" class="form-control" placeholder="請輸入新密碼 (至少6碼)" required>
+										<input type="password" id="new-password" class="form-control" placeholder="請輸入新密碼 (至少6碼)" required minlength="6">
 										<div class="invalid-feedback">請輸入至少 6 碼的新密碼</div>
+									</div>
+									<div class="form-group">
+										<label class="form-label" for="confirm-password">再次輸入新密碼</label>
+										<input type="password" id="confirm-password" class="form-control" placeholder="請再次輸入新密碼" required>
+										<div class="invalid-feedback">請再次輸入新密碼以確認</div>
 									</div>
 									<div class="row no-gutters">
 										<div class="col-md-4 ml-auto text-right">
@@ -56,7 +67,7 @@
 {{/inline}}
 
 {{#*inline "scripts-block"}}
-	<script src="js/forget.js"></script>
+	<script src="js/reset_password.js"></script>
 {{/inline}}
 
 {{/layouts/auth}}

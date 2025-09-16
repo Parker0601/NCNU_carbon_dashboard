@@ -26,71 +26,7 @@
             </div>
             <div class="panel-container show">
                 <div class="panel-content">
-                    <!-- 緊急異常 -->
-                    <div class="alert alert-danger mb-3">
-                        <div class="d-flex align-items-center">
-                            <div class="alert-icon">
-                                <span class="icon-stack icon-stack-md">
-                                    <i class="base-7 icon-stack-3x color-danger-900"></i>
-                                    <i class="{{iconPrefix}} fa-exclamation-triangle icon-stack-1x text-white"></i>
-                                </span>
-                            </div>
-                            <div class="flex-1 ml-2">
-                                <span class="h5">緊急異常</span>
-                                <br>
-                                機台 #3 損壞 - 需要立即維修
-                                <div class="mt-1">
-                                    <button type="button" class="btn btn-danger btn-sm btn-assign" data-alert-id="1" data-severity="emergency">
-                                        立即指派
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 警告異常 -->
-                    <div class="alert alert-warning mb-3">
-                        <div class="d-flex align-items-center">
-                            <div class="alert-icon">
-                                <span class="icon-stack icon-stack-md">
-                                    <i class="base-7 icon-stack-3x color-warning-900"></i>
-                                    <i class="{{iconPrefix}} fa-exclamation icon-stack-1x text-white"></i>
-                                </span>
-                            </div>
-                            <div class="flex-1 ml-2">
-                                <span class="h5">警告</span>
-                                <br>
-                                機台 #2 有機廢棄物輸入超出負荷
-                                <div class="mt-1">
-                                    <button type="button" class="btn btn-warning btn-sm btn-assign" data-alert-id="2" data-severity="warning">
-                                        指派處理
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 提示異常 -->
-                    <div class="alert alert-info mb-3">
-                        <div class="d-flex align-items-center">
-                            <div class="alert-icon">
-                                <span class="icon-stack icon-stack-md">
-                                    <i class="base-7 icon-stack-3x color-info-900"></i>
-                                    <i class="{{iconPrefix}} fa-info icon-stack-1x text-white"></i>
-                                </span>
-                            </div>
-                            <div class="flex-1 ml-2">
-                                <span class="h5">提示</span>
-                                <br>
-                                機台 #1 無有機廢棄物輸入
-                                <div class="mt-1">
-                                    <button type="button" class="btn btn-info btn-sm btn-assign" data-alert-id="3" data-severity="info">
-                                        指派檢查
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <div id="alert-list"><!-- JS 會把即時異常渲染到這 --></div>
                 </div>
             </div>
         </div>
@@ -155,6 +91,11 @@
         </div>
     </div>
 </div>
+<div id="app-config"
+     data-api-root="http://localhost:3000/api"   <!-- 換成你的 API Base -->
+     data-login="/index.html"                    <!-- 換成你的登入頁路徑 -->
+     hidden></div>
+
 {{/inline}}
 
 {{#*inline "scripts-block"}}

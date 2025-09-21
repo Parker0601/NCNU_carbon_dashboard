@@ -49,7 +49,8 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
         <link rel="apple-touch-icon" sizes="180x180" href="img/favicon/apple-touch-icon.png">
         <link rel="icon" type="image/png" sizes="32x32" href="img/favicon/favicon-32x32.png">
         <link rel="mask-icon" href="img/favicon/safari-pinned-tab.svg" color="#5bbad5">
-        <link rel="stylesheet" media="screen, print" href="css/statistics/c3/c3.css">
+        <link rel="stylesheet" media="screen, print" href="css/notifications/sweetalert2/sweetalert2.bundle.css">
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     </head>
     <!-- BEGIN Body -->
     <body class="mod-bg-1 mod-nav-link " data-required-roles="">
@@ -1442,52 +1443,96 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
                             <h1 class="subheader-title">
                                 廢料處理記錄
                                 <small>
-                                    記錄廢料處理情況，用於碳匯計算
+                                    以設備為單位查看/登錄廢料入料資訊並查看報表
                                 </small>
                             </h1>
                         </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="card mb-4">
-                                    <div class="card-header">
-                                        <h5 class="card-title">新增廢料處理記錄</h5>
-                                    </div>
-                                    <div class="card-body">
-                                        <form id="waste-form">
-                                            <div class="form-group">
-                                                <label for="waste-type">廢料類型</label>
-                                                <select class="form-control" id="waste-type" required>
-                                                    <option value="">請選擇廢料類型</option>
-                                                    <option value="廚餘">廚餘</option>
-                                                    <option value="農業廢料">農業廢料</option>
-                                                    <option value="園藝廢料">園藝廢料</option>
-                                                    <option value="其他有機廢料">其他有機廢料</option>
+                        <!-- 切換按鈕列 -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <button id="btn-card-view" class="btn btn-outline-primary btn-sm active">廢料卡片</button>
+                                <button id="btn-report-view" class="btn btn-outline-secondary btn-sm">廢料報表</button>
+                            </div>
+                            <div>
+                                <button id="btn-waste-refresh" class="btn btn-outline-info btn-sm mr-2">
+                                    <i class="fal fa-sync-alt"></i> 刷新數據
+                                </button>
+                                <h4 class="m-0 d-inline">入料資訊</h4>
+                            </div>
+                        </div>
+                        <!-- 卡片視圖：一台設備一張卡 -->
+                        <div id="waste-card-view">
+                            <div class="row" id="waste-card-list">
+                                <!-- 由 JS 動態產生設備卡片 -->
+                            </div>
+                        </div>
+                        <!-- 報表視圖 -->
+                        <div id="waste-report-view" style="display:none;">
+                            <div class="row mt-4">
+                                <div class="col-12">
+                                    <div class="panel">
+                                        <div class="panel-hdr">
+                                            <h2>廢料報表</h2>
+                                            <div class="panel-toolbar">
+                                                <select id="waste-report-selector" class="form-control form-control-sm">
+                                                    <option value="daily_trend">每日入料趨勢（依設備彙總）</option>
+                                                    <option value="by_device_total">各設備入料總量（長條圖）</option>
+                                                    <option value="by_type_distribution">廢料類型分布（圓餅圖）</option>
+                                                    <option value="weekly_trend">每週入料趨勢</option>
+                                                    <option value="monthly_trend">每月入料趨勢</option>
                                                 </select>
                                             </div>
-                                            <div class="form-group">
-                                                <label for="waste-weight">廢料重量 (kg)</label>
-                                                <input type="number" class="form-control" id="waste-weight" min="0" step="0.1" required>
+                                        </div>
+                                        <div class="panel-container show">
+                                            <div class="panel-content">
+                                                <div id="waste-report-container">
+                                                    <canvas id="waste-report-canvas" height="120"></canvas>
+                                                </div>
                                             </div>
-                                            <div class="form-group">
-                                                <label for="process-date">處理日期</label>
-                                                <input type="date" class="form-control" id="process-date" required>
-                                            </div>
-                                            <button type="submit" class="btn btn-primary">提交記錄</button>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="card">
-                                    <div class="card-header">
-                                        <h5 class="card-title">本週廢料處理趨勢</h5>
-                                    </div>
-                                    <div class="card-body">
-                                        <div id="waste-trend-chart" style="height: 300px;"></div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
+                        <!--（可選）Handlebars 卡片樣板，若你想在 JS 端用模板渲染 -->
+                        <script id="waste-card-template" type="text/x-handlebars-template">
+                            <div class="col-xl-4 col-lg-6 col-md-6">
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <h5 class="card-title mb-0"></h5>
+          <small class="text-muted">設備代碼：</small>
+        </div>
+        <span class="badge "></span>
+      </div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <div class="text-muted small">近7日入料總量</div>
+            <div class="font-weight-bold"> kg</div>
+          </div>
+          <div class="text-right">
+            <div class="text-muted small">最新入料</div>
+            <div class="font-weight-bold"> kg</div>
+            <div class="small text-muted"></div>
+          </div>
+        </div>
+        <div class="progress mb-3" style="height:8px;">
+          <div class="progress-bar" role="progressbar" style="width: %;" aria-valuenow="" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        <div class="d-flex justify-content-end">
+          <button 
+            class="btn btn-sm btn-primary btn-fill-input" 
+            data-device-id=""
+            data-device-name=""
+          >
+            填寫入料資訊
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</script>
                     </main>
                     <!-- END Page Content -->
                     <!-- this overlay is activated only when mobile menu is triggered -->
@@ -2310,9 +2355,9 @@ License: You must have a valid license purchased only from wrapbootstrap.com (li
         <script src="js/app.bundle.js"></script>
         <!-- 固定載入 logout.js，避免被覆蓋 -->
         <script src="js/logout.js" defer></script>
-        <script src="https://d3js.org/d3.v5.min.js"></script>
-        <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/c3/0.7.20/c3.min.js"></script>
+        <script src="js/notifications/sweetalert2/sweetalert2.bundle.js"></script>
+        <script src="/js/login.js"></script>
+        <!-- 你的頁面控制腳本（請在此檔中處理：切換視圖、抓設備列表、渲染卡片、導向入料頁、載入報表圖表） -->
         <script src="/js/staff/waste_management.js"></script>
     </body>
     <!-- END Body -->

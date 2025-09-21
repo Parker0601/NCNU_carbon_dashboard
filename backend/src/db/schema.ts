@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, serial, integer, text, doublePrecision, timestamp, date } from 'drizzle-orm/pg-core';
+import { pgTable, pgEnum, serial, integer, text, doublePrecision, timestamp, date, varchar } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // ENUM 定義
@@ -82,12 +82,24 @@ export const energyRecord = pgTable('energy_record', {
 
 // carbon table
 export const carbon = pgTable('carbon', {
-  id: serial('id').primaryKey().notNull(),
-  userId: integer('user_id').notNull().references(() => users.id),
-  fuelName: text('Fuel_name').notNull(),
-  consumption: doublePrecision('consumption').notNull(),
-  electricity: doublePrecision('Electricity'),
-  coefficient: doublePrecision('coefficient').notNull(),
+  id: varchar('id').primaryKey().notNull(),
+  fuelName: text('Fuel_name'),
+  consumption: integer('consumption'),
+  unit: text('unit'),
+  co2: doublePrecision('CO2'),
+  ch4: doublePrecision('CH4'),
+  n2o: doublePrecision('N2O'),
+  pfcs: doublePrecision('PFCs'),
+  hfcs: doublePrecision('HFCs'),
+  sf6: doublePrecision('SF6'),
+  nf3: doublePrecision('NF3'),
+  co2gwp: integer('CO2gwp'),
+  ch4gwp: integer('CH4gwp'),
+  n2ogwp: integer('N2Ogwp'),
+  pfcsgwp: integer('PFCsgwp'),
+  hfcsgwp: integer('HFCsgwp'),
+  sf6gwp: integer('SF6gwp'),
+  nf3gwp: integer('NF3gwp'),
 });
 
 // 關聯（可依需求擴充）
@@ -97,7 +109,6 @@ export const usersRelations = relations(users, ({ many }) => ({
   issuesAssigned: many(issues, { relationName: 'assigner' }),
   maintenanceRecords: many(maintenanceRecords),
   schedule: many(schedule),
-  carbon: many(carbon),
 }));
 
 export const devicesRelations = relations(devices, ({ many }) => ({
@@ -131,7 +142,3 @@ export const scheduleRelations = relations(schedule, ({ one }) => ({
 export const energyRecordRelations = relations(energyRecord, ({ one }) => ({
   device: one(devices, { fields: [energyRecord.deviceId], references: [devices.id] }),
 }));
-
-export const carbonRelations = relations(carbon, ({ one }) => ({
-  user: one(users, { fields: [carbon.userId], references: [users.id] }),
-})); 

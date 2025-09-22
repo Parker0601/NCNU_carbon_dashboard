@@ -1,0 +1,66 @@
+{{#> layouts/main 
+    title="廢料管理總覽" 
+    pagename="manager_scrap_overview"
+    heading="廢料管理總覽"
+    category_1="主管專區"
+    pagedescription="檢視各設備入料資訊、報表與操作"
+}}
+
+{{#*inline "head-block"}}
+  <!-- 本機 SweetAlert2（CSP 友善） -->
+  <link rel="stylesheet" media="screen, print" href="/css/notifications/sweetalert2/sweetalert2.bundle.css" />
+{{/inline}}
+
+{{#*inline "content-block"}}
+<div class="row mb-3">
+  <div class="col">
+    <button id="btn-card-view" class="btn btn-outline-primary active">卡片模式</button>
+    <button id="btn-report-view" class="btn btn-outline-secondary">報表模式</button>
+    <button id="btn-waste-refresh" class="btn btn-outline-success">刷新</button>
+  </div>
+</div>
+
+<!-- 卡片模式 -->
+<div id="waste-card-view">
+  <div class="row" id="waste-card-list"></div>
+</div>
+
+<!-- 報表模式 -->
+<div id="waste-report-view" style="display:none;">
+  <div class="row mb-3">
+    <div class="col-md-4">
+      <select id="waste-report-selector" class="form-control">
+        <option value="daily_trend">每日趨勢</option>
+        <option value="by_device_total">各設備總量</option>
+        <option value="by_type_distribution">類型分布</option>
+      </select>
+    </div>
+  </div>
+  <div style="height:400px;">
+    <canvas id="waste-report-canvas"></canvas>
+  </div>
+</div>
+
+<!-- 單筆 scrap 詳細資訊（預設隱藏） -->
+<div id="scrap-detail-view" style="display:none;" class="mt-4">
+  <div class="d-flex align-items-center gap-2 mb-2">
+    <h4 class="mb-0">Scrap 詳細資料</h4>
+    <span id="scrap-detail-badge" class="badge badge-secondary"></span>
+  </div>
+  <div id="scrap-detail-content" class="border p-3 bg-light"></div>
+  <div class="mt-2 d-flex gap-2">
+    <button id="btn-edit-scrap" class="btn btn-warning">修改</button>
+    <button id="btn-close-detail" class="btn btn-secondary">關閉</button>
+  </div>
+</div>
+{{/inline}}
+
+{{#*inline "scripts-block"}}
+  <!-- 頁面所需外掛（本機，無 inline） -->
+  <script src="/js/notifications/sweetalert2/sweetalert2.bundle.js"></script>
+  <script src="/js/statistics/chartjs/chartjs.bundle.js"></script>
+  <!-- 頁面腳本 -->
+  <script src="/js/manager/scrap_overview.js"></script>
+{{/inline}}
+
+{{/layouts/main}}

@@ -1,0 +1,71 @@
+{{#> layouts/main 
+    title="編輯 Scrap"
+    pagename="manager_scrap_edit"
+    heading="編輯 Scrap"
+    category_1="主管專區"
+    pagedescription="更新單筆入料資料"
+}}
+
+{{#*inline "head-block"}}
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+{{/inline}}
+
+{{#*inline "content-block"}}
+<div class="card">
+  <div class="card-body">
+    <form id="scrap-edit-form">
+      <div class="form-row">
+        <div class="form-group col-md-4">
+          <label>Scrap ID</label>
+          <input type="text" id="f-id" class="form-control" disabled>
+        </div>
+        <div class="form-group col-md-4">
+          <label>設備 ID</label>
+          <input type="number" id="f-deviceId" class="form-control" min="1">
+        </div>
+        <div class="form-group col-md-4">
+          <label>狀態</label>
+          <select id="f-status" class="form-control">
+            <option value="1">1 - 正常運行</option>
+            <option value="2">2 - 維護中</option>
+            <option value="3">3 - 故障</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group col-md-4">
+          <label>類型</label>
+          <input type="text" id="f-type" class="form-control" placeholder="如：metal / plastic">
+        </div>
+        <div class="form-group col-md-4">
+          <label>重量 (kg)</label>
+          <input type="number" id="f-weight" class="form-control" min="0" step="1">
+        </div>
+        <div class="form-group col-md-4">
+          <label>體積</label>
+          <input type="number" id="f-volume" class="form-control" min="0" step="1">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group col-md-4">
+          <label>濕度</label>
+          <input type="number" id="f-humidity" class="form-control" min="0" step="1">
+        </div>
+      </div>
+
+      <div class="mt-3 d-flex gap-2">
+        <button type="button" id="btn-save" class="btn btn-primary">儲存</button>
+        <a href="/manager/scrap_overview" class="btn btn-secondary">返回總覽</a>
+      </div>
+    </form>
+  </div>
+</div>
+{{/inline}}
+
+{{#*inline "scripts-block"}}
+  <script src="/js/manager/scrap_edit.js"></script>
+{{/inline}}
+
+{{/layouts/main}}

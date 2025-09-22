@@ -9,6 +9,7 @@ const PAGES_BASE =
   window.location.origin.includes(':8080') ? 'http://localhost:3000' : '';
 const WASTE_INPUT_PAGE = (deviceId) =>
   `${PAGES_BASE}/waste_input?deviceId=${encodeURIComponent(deviceId)}`;
+const MY_SCRAPS_PAGE = () => `${PAGES_BASE}/my_scraps`;
 
 // ====================================================
 // 小工具
@@ -51,6 +52,17 @@ function escapeHtml(str) {
   }[s]));
 }
 
+async function ensureChart() {
+  if (window.Chart) return;
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = '/js/vendor/chart.4.4.3.min.js'; // 與上面 head-block 保持一致
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Chart.js 載入失敗'));
+    document.head.appendChild(s);
+  });
+}
+
 // ====================================================
 // DOM
 // ====================================================
@@ -80,9 +92,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function bindUI() {
   elBtnCardView?.addEventListener('click', () => toggleView('card'));
-  elBtnReportView?.addEventListener('click', () => {
+  elBtnReportView?.addEventListener('click', async () => {
     toggleView('report');
-    if (!chartRef) renderReportChart(elReportSelect?.value || 'daily_trend');
+    if (!chartRef) {
+      await ensureChart(); // ← 新增
+      renderReportChart(elReportSelect?.value || 'daily_trend');
+    }
   });
   elBtnRefresh?.addEventListener('click', async () => {
     try {
@@ -101,6 +116,11 @@ function bindUI() {
     if (!deviceId) return;
     window.location.href = WASTE_INPUT_PAGE(deviceId);
   });
+
+  const elBtnMyScraps = document.getElementById('btn-my-scraps-link');
+  elBtnMyScraps?.addEventListener('click', () => {
+    window.location.href = MY_SCRAPS_PAGE();
+  });
 }
 
 async function boot(force = false) {
@@ -112,13 +132,16 @@ async function boot(force = false) {
   }
 }
 
-function toggleView(view) {
+async function toggleView(view) {
   const showCard = view === 'card';
   elCardView.style.display = showCard ? '' : 'none';
   elReportView.style.display = showCard ? 'none' : '';
   elBtnCardView?.classList.toggle('active', showCard);
   elBtnReportView?.classList.toggle('active', !showCard);
-  if (!showCard) renderReportChart(elReportSelect?.value || 'daily_trend');
+  if (!showCard) {
+    await ensureChart(); // ← 新增
+    renderReportChart(elReportSelect?.value || 'daily_trend');
+  }
 }
 
 // ====================================================

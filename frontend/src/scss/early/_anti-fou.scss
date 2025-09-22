@@ -1,0 +1,9 @@
+// 防閃爍 CSS
+body:not([data-loaded="true"]) .role-nav-item { display: none !important; }
+.role-nav-item { display: none !important; }
+html[data-user-role="boss"]    .role-nav-item[data-role="boss"],
+html[data-user-role="manager"] .role-nav-item[data-role="manager"],
+html[data-user-role="staff"]   .role-nav-item[data-role="staff"] {
+  display: block !important;
+}
+#js-nav-menu { visibility: hidden !important; }

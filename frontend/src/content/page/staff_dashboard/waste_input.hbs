@@ -1,0 +1,88 @@
+{{#> 
+    layouts/main 
+    title="填寫入料資訊" 
+    pagename="waste_input"
+    heading="填寫入料資訊"
+    category_1="員工專區"
+    pagedescription="為指定設備新增廢料入料紀錄"
+}}
+
+{{#*inline "head-block"}}
+<link rel="stylesheet" media="screen, print" href="css/notifications/sweetalert2/sweetalert2.bundle.css">
+{{/inline}}
+
+{{#*inline "content-block"}}
+<div class="row">
+  <div class="col-xl-8 col-lg-9 col-md-12">
+    <div class="card mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <h5 class="card-title mb-0">設備入料表單</h5>
+          <small class="text-muted">請確認設備與入料內容後送出</small>
+        </div>
+        <a href="/waste_management" class="btn btn-sm btn-outline-secondary">
+          <i class="fal fa-arrow-left"></i> 返回列表
+        </a>
+      </div>
+      <div class="card-body">
+        <form id="waste-input-form" novalidate>
+          <div class="form-group">
+            <label>設備</label>
+            <input type="text" class="form-control" id="deviceName" readonly>
+            <input type="hidden" id="deviceId">
+          </div>
+
+          <div class="form-group">
+            <label for="wasteType">廢料類型 <span class="text-danger">*</span></label>
+            <select class="form-control" id="wasteType" required>
+              <option value="">請選擇</option>
+              <option value="廚餘">廚餘</option>
+              <option value="農業廢料">農業廢料</option>
+              <option value="園藝廢料">園藝廢料</option>
+              <option value="其他有機廢料">其他有機廢料</option>
+            </select>
+            <div class="invalid-feedback">請選擇廢料類型</div>
+          </div>
+
+          <div class="form-group">
+            <label for="wasteWeight">重量 (kg) <span class="text-danger">*</span></label>
+            <input type="number" class="form-control" id="wasteWeight" min="0" step="0.1" placeholder="例如：12.5" required>
+            <div class="invalid-feedback">請輸入正確的重量</div>
+          </div>
+
+          <div class="form-group">
+            <label for="processDateTime">處理時間 <span class="text-danger">*</span></label>
+            <input type="datetime-local" class="form-control" id="processDateTime" required>
+            <div class="invalid-feedback">請選擇處理時間</div>
+          </div>
+
+          <div class="form-group">
+            <label for="note">備註</label>
+            <textarea class="form-control" id="note" rows="3" placeholder="可填寫來源、含水率、特別事項等（選填）"></textarea>
+          </div>
+
+          <div class="d-flex justify-content-end">
+            <button type="button" id="btnSubmit" class="btn btn-primary">
+              <i class="fal fa-paper-plane"></i> 送出
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="alert alert-info">
+      <div class="d-flex align-items-center">
+        <i class="fal fa-info-circle mr-2"></i>
+        <div>送出成功後將自動返回「廢料處理記錄」列表。</div>
+      </div>
+    </div>
+  </div>
+</div>
+{{/inline}}
+
+{{#*inline "scripts-block"}}
+<script src="js/notifications/sweetalert2/sweetalert2.bundle.js"></script>
+<script src="/js/login.js"></script>
+<script src="/js/staff/waste_input.js"></script>
+{{/inline}}
+
+{{/layouts/main}}

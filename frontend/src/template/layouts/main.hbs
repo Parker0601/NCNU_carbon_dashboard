@@ -8,73 +8,19 @@
       <!-- 1) 全站認證工具（只載一次） -->
       <script src="js/auth.js"></script>
 
-      <!-- 2) ultra-early：從快取角色避免閃爍 -->
-      <script>
-        (function () {
-          var cached = localStorage.getItem('userRole') || localStorage.getItem('currentRole');
-          var map = { '1':'staff','2':'manager','3':'boss' };
-          var role = map[String(cached)] || cached;
-          if (role) document.documentElement.setAttribute('data-user-role', role);
-          document.body && document.body.setAttribute('data-loaded', 'false');
-        })();
-      </script>
+      <!-- 2) ultra-early：從快取角色避免閃爍（改外部檔，且不要 defer） -->
+      <script src="js/early/role-cache.js"></script>
 
-      <!-- 3) 防閃爍 CSS -->
-      <style>
-        body:not([data-loaded="true"]) .role-nav-item { display: none !important; }
-        .role-nav-item { display: none !important; }
-        html[data-user-role="boss"]    .role-nav-item[data-role="boss"],
-        html[data-user-role="manager"] .role-nav-item[data-role="manager"],
-        html[data-user-role="staff"]   .role-nav-item[data-role="staff"] {
-          display: block !important;
-        }
-        #js-nav-menu { visibility: hidden !important; }
-      </style>
+      <!-- 3) 防閃爍 CSS（改外部檔） -->
+      <link rel="stylesheet" href="/css/early/anti-fou.css">
 
       <!-- 4) 需要的其他 head 資源（若有） -->
       {{#each page-settings.js}}
-        <script src="{{this}}"></script>
+        <script src="{{this}}" defer></script>
       {{/each}}
 
-      <!-- 5) 提前執行 ensureAuth，通過後解除防閃 -->
-      <script>
-        (async function () {
-          var PUBLIC_PAGES = ['/page_login', '/page_register', '/403', '/404'];
-
-          if (PUBLIC_PAGES.includes(location.pathname)) {
-            document.body && document.body.setAttribute('data-loaded', 'true');
-            var m = document.getElementById('js-nav-menu');
-            if (m && m.style) m.style.visibility = 'visible';
-            return;
-          }
-
-          function getRequiredRoles() {
-            var rr = (document.body && document.body.getAttribute('data-required-roles')) || '';
-            return rr.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-          }
-
-          function showNav() {
-            document.body && document.body.setAttribute('data-loaded', 'true');
-            var menu = document.getElementById('js-nav-menu');
-            if (menu && menu.style) menu.style.visibility = 'visible';
-          }
-
-          try {
-            var tries = 0;
-            while (!(window.Auth && typeof Auth.ensureAuth === 'function') && tries < 10) {
-              await new Promise(function (r) { setTimeout(r, 10); });
-              tries++;
-            }
-            var requiredRoles = getRequiredRoles();
-            if (window.Auth && typeof Auth.ensureAuth === 'function') {
-              await Auth.ensureAuth(requiredRoles);
-            }
-            showNav();
-          } catch (e) {
-            console.warn('ensureAuth early init error:', e);
-          }
-        })();
-      </script>
+      <!-- 5) 提前執行 ensureAuth（改外部檔，建議 defer） -->
+      <script src="js/early/ensure-auth.js" defer></script>
     {{/head-block}}
   </head>
 

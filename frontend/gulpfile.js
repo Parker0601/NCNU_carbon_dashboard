@@ -30,6 +30,24 @@ gulp.task('watch:api', gulp.series('scripts:copy', function watchApi() {
 gulp.task('bundle:all', gulp.series('scripts:copy'));
 
 // ------------------------------------------------------------
+// 1.5) Styles copy 任務：把 src/css 複製到 dist（新增）
+// ------------------------------------------------------------
+const CSS_SOURCES = [
+  'src/css/**/*.css',
+];
+
+function stylesCopy() {
+  return gulp
+    .src(CSS_SOURCES, { base: 'src' })
+    .pipe(gulp.dest('dist'));
+}
+gulp.task('styles:copy', stylesCopy);
+
+gulp.task('watch:css', gulp.series('styles:copy', function watchCss() {
+  return gulp.watch(CSS_SOURCES, stylesCopy);
+}));
+
+// ------------------------------------------------------------
 // 2) build-html：編譯 HBS → HTML
 // ------------------------------------------------------------
 function buildHtmlTask() {
@@ -97,22 +115,27 @@ if (chosen) {
   const watchApiExists = hasTask('watch:api');
   const bundleAllExists = hasTask('bundle:all');
   const watchHbsExists = hasTask('watch:hbs');
+  const stylesCopyExists = hasTask('styles:copy');
+  const watchCssExists = hasTask('watch:css');
 
   if (['serve', 'dev', 'watch', 'start'].includes(chosen)) {
-    // 開發流程：serve/dev/watch/start + scripts:copy + build-html + watch
+    // 開發流程：serve/dev/watch/start + scripts:copy + styles:copy + build-html + watch
     const tasks = [chosen];
     if (watchApiExists) tasks.push('watch:api');
     if (gulp.registry().get('scripts:copy')) tasks.push('scripts:copy');
+    if (stylesCopyExists) tasks.push('styles:copy');
     if (gulp.registry().get('build-html')) tasks.push('build-html');
     if (watchHbsExists) tasks.push('watch:hbs');
+    if (watchCssExists) tasks.push('watch:css');
 
     gulp.task('default', parallel(...tasks));
 
-    console.log(`[gulp] Default task set to "${chosen}" + scripts:copy + build-html${watchApiExists ? ' + watch:api' : ''}${watchHbsExists ? ' + watch:hbs' : ''}`);
+    console.log(`[gulp] Default task set to "${chosen}" + scripts:copy${stylesCopyExists ? ' + styles:copy' : ''} + build-html${watchApiExists ? ' + watch:api' : ''}${watchHbsExists ? ' + watch:hbs' : ''}${watchCssExists ? ' + watch:css' : ''}`);
   } else {
-    // 建置流程：bundle:all + build-html + build
+    // 建置流程：bundle:all + styles:copy + build-html + build
     const tasks = [];
     if (bundleAllExists) tasks.push('bundle:all');
+    if (stylesCopyExists) tasks.push('styles:copy');
     if (gulp.registry().get('build-html')) tasks.push('build-html');
     tasks.push(chosen);
 

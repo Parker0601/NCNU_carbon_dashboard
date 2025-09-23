@@ -43,6 +43,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "chart.js": "^4.5.0",
     "handlebars": "^4.7.8"
   }
 }

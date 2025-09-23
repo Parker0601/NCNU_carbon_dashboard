@@ -8,12 +8,15 @@ services:
       POSTGRES_DB: carbon_management
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
+      TZ: Asia/Taipei
+      PGTZ: Asia/Taipei
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - carbon_network
+    command: postgres -c timezone=Asia/Taipei
 
   app:
     build:
@@ -24,7 +27,8 @@ services:
       NODE_ENV: development
       PORT: 3000
       HOST: 0.0.0.0
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/carbon_management
+      TZ: Asia/Taipei
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/carbon_management?options=-c%20timezone%3DAsia%2FTaipei
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
       JWT_EXPIRES_IN: 7d
       LOG_LEVEL: info

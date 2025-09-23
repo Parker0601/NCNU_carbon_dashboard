@@ -1,14 +1,14 @@
 {{#> layouts/main 
     title="編輯 Scrap"
-    pagename="manager_scrap_edit"
+    pagename="scrap_edit"
     heading="編輯 Scrap"
     category_1="主管專區"
     pagedescription="更新單筆入料資料"
 }}
 
 {{#*inline "head-block"}}
-  <link rel="stylesheet" media="screen, print" href="css/notifications/sweetalert2/sweetalert2.bundle.css">
-  <script src="js/notifications/sweetalert2/sweetalert2.bundle.js"></script>
+  <link rel="stylesheet" media="screen, print" href="/css/notifications/sweetalert2/sweetalert2.bundle.css">
+  <script src="/js/notifications/sweetalert2/sweetalert2.bundle.js"></script>
 {{/inline}}
 
 {{#*inline "content-block"}}
@@ -58,7 +58,7 @@
 
       <div class="mt-3 d-flex gap-2">
         <button type="button" id="btn-save" class="btn btn-primary">儲存</button>
-        <a href="/manager/scrap_overview" class="btn btn-secondary">返回總覽</a>
+        <a href="/scrap_overview" class="btn btn-secondary">返回總覽</a>
       </div>
     </form>
   </div>

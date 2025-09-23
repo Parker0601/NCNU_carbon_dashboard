@@ -20,4 +20,12 @@ router.get('/my_scraps', (_req: Request, res: Response) => {
   res.sendFile(path.join(DIST, 'my_scraps.html'));
 });
 
+router.get('/scrap_edit', (_req: Request, res: Response) => {
+  res.sendFile(path.join(DIST, 'scrap_edit.html'));
+});
+
+router.get('/scrap_overview', (_req: Request, res: Response) => {
+  res.sendFile(path.join(DIST, 'scrap_overview.html'));
+});
+
 export default router;

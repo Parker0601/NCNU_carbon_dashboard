@@ -13,7 +13,6 @@ const API_SCRAP_BY_ID     = (id) => `${API_BASE}/scrap/${id}`;
 
 // 依你的專案調整：前端 8080 靜態站 → 連回 3000 的頁面
 const PAGES_BASE = window.location.origin.includes(':8080') ? 'http://localhost:3000' : '';
-const WASTE_INPUT_PAGE = (deviceId) => `${PAGES_BASE}/waste_input?deviceId=${encodeURIComponent(deviceId)}`;
 const SCRAP_EDIT_PAGE  = (id) => `${PAGES_BASE}/scrap_edit?id=${encodeURIComponent(id)}`;
 
 // ==============================
@@ -126,12 +125,6 @@ function bindUI() {
       await openDeviceListModal(id);
       return;
     }
-
-    if (btnFill) {
-      const id = btnFill.getAttribute('data-device-id');
-      window.location.href = WASTE_INPUT_PAGE(id);
-      return;
-    }
   });
 
   // 詳細區塊
@@ -238,7 +231,6 @@ function renderCards() {
               <div class="mt-3 d-flex gap-2">
                 <button class="btn btn-sm btn-primary btn-view-latest" data-device-id="${dev.id}">看最新</button>
                 <button class="btn btn-sm btn-outline-secondary btn-view-list" data-device-id="${dev.id}">看清單</button>
-                <button class="btn btn-sm btn-success btn-fill-input" data-device-id="${dev.id}">填入料</button>
               </div>
             </div>
           </div>
@@ -341,7 +333,7 @@ async function openDeviceListModal(deviceId) {
           <td>${x.type}</td>
           <td>${x.weight ?? x.amount ?? 0}</td>
           <td>${x.status}</td>
-          <td><button class="btn btn-sm btn-info btn-view-scrap" data-id="${x.id}">檢視</button></td>
+          <!--<td><button class="btn btn-sm btn-info btn-view-scrap" data-id="${x.id}">檢視</button></td>-->
         </tr>`
       )
       .join('');
@@ -352,7 +344,7 @@ async function openDeviceListModal(deviceId) {
       html: `
         <div class="table-responsive">
           <table class="table table-sm">
-            <thead><tr><th>ID</th><th>類型</th><th>重量</th><th>狀態</th><th>操作</th></tr></thead>
+            <thead><tr><th>ID</th><th>類型</th><th>重量</th><th>狀態</th><!--<th>操作</th>--></tr></thead>
             <tbody>${rows || '<tr><td colspan="5" class="text-center">無資料</td></tr>'}</tbody>
           </table>
         </div>`,

@@ -1,0 +1,139 @@
+import { pgTable, pgEnum, serial, integer, text, doublePrecision, timestamp, date, varchar } from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
+export const scrapStatusEnum = pgEnum('scrap_status', ['1', '2', '3']);
+export const deviceStatusEnum = pgEnum('device_status', ['1', '2', '3']);
+export const issueStatusEnum = pgEnum('issue_status', ['1', '2', '3']);
+export const userRoleEnum = pgEnum('user_role', ['1', '2', '3']);
+export const users = pgTable('users', {
+    id: serial('id').primaryKey().notNull(),
+    name: text('name').notNull(),
+    password: text('password').notNull(),
+    role: userRoleEnum('role').notNull(),
+    mail: text('mail'),
+    createTime: timestamp('create_time').notNull(),
+});
+export const devices = pgTable('devices', {
+    id: integer('id').primaryKey().notNull(),
+    status: deviceStatusEnum('status').notNull(),
+    name: text('name').notNull(),
+    bootTime: timestamp('boot_time').notNull(),
+    ratio: doublePrecision('ratio'),
+});
+export const scraps = pgTable('scraps', {
+    id: serial('id').primaryKey().notNull(),
+    userId: integer('user_id').notNull().references(() => users.id),
+    deviceId: integer('device_id').notNull().references(() => devices.id),
+    type: text('type').notNull(),
+    status: scrapStatusEnum('status').notNull(),
+    humidity: integer('humidity').notNull(),
+    weight: integer('weight').notNull(),
+    volume: integer('volume').notNull(),
+});
+export const issues = pgTable('issues', {
+    id: serial('id').primaryKey().notNull(),
+    deviceId: integer('device_id').notNull().references(() => devices.id),
+    description: text('description'),
+    issuer: integer('issuer').notNull().references(() => users.id),
+    assigner: integer('assigner').notNull().references(() => users.id),
+    status: issueStatusEnum('status').notNull(),
+    createTime: timestamp('create_time').notNull(),
+});
+export const maintenanceRecords = pgTable('maintenance_records', {
+    id: serial('id').primaryKey().notNull(),
+    issueId: integer('issue_id').notNull().references(() => issues.id),
+    userId: integer('user_id').notNull().references(() => users.id),
+    description: text('description').notNull(),
+    createTime: timestamp('create_time').notNull(),
+    endTime: timestamp('end_time').notNull(),
+});
+export const schedule = pgTable('schedule', {
+    id: serial('id').primaryKey().notNull(),
+    userId: integer('user_id').notNull().references(() => users.id),
+    deviceId: integer('device_id').references(() => devices.id),
+    title: text('title').notNull(),
+    description: text('description'),
+    date: date('date').notNull(),
+    startTime: timestamp('start_time').notNull(),
+    endTime: timestamp('end_time').notNull(),
+});
+export const energyRecord = pgTable('energy_record', {
+    id: serial('id').primaryKey().notNull(),
+    deviceId: integer('device_id').references(() => devices.id),
+    type: text('type'),
+    date: date('date'),
+    consumption: doublePrecision('consumption'),
+});
+export const carbon = pgTable('carbon', {
+    id: varchar('id').primaryKey().notNull(),
+    fuelName: text('Fuel_name'),
+    consumption: integer('consumption'),
+    unit: text('unit'),
+    co2: doublePrecision('CO2'),
+    ch4: doublePrecision('CH4'),
+    n2o: doublePrecision('N2O'),
+    pfcs: doublePrecision('PFCs'),
+    hfcs: doublePrecision('HFCs'),
+    sf6: doublePrecision('SF6'),
+    nf3: doublePrecision('NF3'),
+    co2gwp: integer('CO2gwp'),
+    ch4gwp: integer('CH4gwp'),
+    n2ogwp: integer('N2Ogwp'),
+    pfcsgwp: integer('PFCsgwp'),
+    hfcsgwp: integer('HFCsgwp'),
+    sf6gwp: integer('SF6gwp'),
+    nf3gwp: integer('NF3gwp'),
+});
+export const carbonCalculations = pgTable('carbon_calculations', {
+    id: serial('id').primaryKey().notNull(),
+    userId: integer('user_id').notNull().references(() => users.id),
+    carbonId: varchar('carbon_id').notNull().references(() => carbon.id),
+    fuelName: text('fuel_name').notNull(),
+    consumption: doublePrecision('consumption').notNull(),
+    unit: text('unit').notNull(),
+    totalEmission: doublePrecision('total_emission').notNull(),
+    calculationDate: date('calculation_date').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    notes: text('notes'),
+});
+export const usersRelations = relations(users, ({ many }) => ({
+    scraps: many(scraps),
+    issuesIssued: many(issues, { relationName: 'issuer' }),
+    issuesAssigned: many(issues, { relationName: 'assigner' }),
+    maintenanceRecords: many(maintenanceRecords),
+    schedule: many(schedule),
+    carbonCalculations: many(carbonCalculations),
+}));
+export const devicesRelations = relations(devices, ({ many }) => ({
+    scraps: many(scraps),
+    issues: many(issues),
+    schedule: many(schedule),
+    energyRecord: many(energyRecord),
+}));
+export const scrapsRelations = relations(scraps, ({ one }) => ({
+    user: one(users, { fields: [scraps.userId], references: [users.id] }),
+    device: one(devices, { fields: [scraps.deviceId], references: [devices.id] }),
+}));
+export const issuesRelations = relations(issues, ({ one }) => ({
+    device: one(devices, { fields: [issues.deviceId], references: [devices.id] }),
+    issuer: one(users, { fields: [issues.issuer], references: [users.id], relationName: 'issuer' }),
+    assigner: one(users, { fields: [issues.assigner], references: [users.id], relationName: 'assigner' }),
+}));
+export const maintenanceRecordsRelations = relations(maintenanceRecords, ({ one }) => ({
+    issue: one(issues, { fields: [maintenanceRecords.issueId], references: [issues.id] }),
+    user: one(users, { fields: [maintenanceRecords.userId], references: [users.id] }),
+}));
+export const scheduleRelations = relations(schedule, ({ one }) => ({
+    user: one(users, { fields: [schedule.userId], references: [users.id] }),
+    device: one(devices, { fields: [schedule.deviceId], references: [devices.id] }),
+}));
+export const energyRecordRelations = relations(energyRecord, ({ one }) => ({
+    device: one(devices, { fields: [energyRecord.deviceId], references: [devices.id] }),
+}));
+export const carbonRelations = relations(carbon, ({ many }) => ({
+    calculations: many(carbonCalculations),
+}));
+export const carbonCalculationsRelations = relations(carbonCalculations, ({ one }) => ({
+    user: one(users, { fields: [carbonCalculations.userId], references: [users.id] }),
+    carbon: one(carbon, { fields: [carbonCalculations.carbonId], references: [carbon.id] }),
+}));
+//# sourceMappingURL=schema.js.map

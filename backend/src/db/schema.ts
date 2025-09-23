@@ -102,6 +102,20 @@ export const carbon = pgTable('carbon', {
   nf3gwp: integer('NF3gwp'),
 });
 
+// carbon_calculations table
+export const carbonCalculations = pgTable('carbon_calculations', {
+  id: serial('id').primaryKey().notNull(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  carbonId: varchar('carbon_id').notNull().references(() => carbon.id),
+  fuelName: text('fuel_name').notNull(),
+  consumption: doublePrecision('consumption').notNull(),
+  unit: text('unit').notNull(),
+  totalEmission: doublePrecision('total_emission').notNull(),
+  calculationDate: date('calculation_date').notNull(),
+  createdAt: timestamp('created_at').notNull(),
+  notes: text('notes'),
+});
+
 // 關聯（可依需求擴充）
 export const usersRelations = relations(users, ({ many }) => ({
   scraps: many(scraps),
@@ -109,6 +123,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   issuesAssigned: many(issues, { relationName: 'assigner' }),
   maintenanceRecords: many(maintenanceRecords),
   schedule: many(schedule),
+  carbonCalculations: many(carbonCalculations),
 }));
 
 export const devicesRelations = relations(devices, ({ many }) => ({
@@ -141,4 +156,13 @@ export const scheduleRelations = relations(schedule, ({ one }) => ({
 
 export const energyRecordRelations = relations(energyRecord, ({ one }) => ({
   device: one(devices, { fields: [energyRecord.deviceId], references: [devices.id] }),
+}));
+
+export const carbonRelations = relations(carbon, ({ many }) => ({
+  calculations: many(carbonCalculations),
+}));
+
+export const carbonCalculationsRelations = relations(carbonCalculations, ({ one }) => ({
+  user: one(users, { fields: [carbonCalculations.userId], references: [users.id] }),
+  carbon: one(carbon, { fields: [carbonCalculations.carbonId], references: [carbon.id] }),
 }));

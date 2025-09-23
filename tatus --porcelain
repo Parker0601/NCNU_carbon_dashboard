@@ -1,0 +1,353 @@
+[1mdiff --git a/backend/src/routes/carbon-calculations.routes.ts b/backend/src/routes/carbon-calculations.routes.ts[m
+[1mdeleted file mode 100644[m
+[1mindex 4b18ce5..0000000[m
+[1m--- a/backend/src/routes/carbon-calculations.routes.ts[m
+[1m+++ /dev/null[m
+[36m@@ -1,626 +0,0 @@[m
+[31m-import { Router } from 'express';[m
+[31m-import { db } from '../db/index';[m
+[31m-import { carbon, carbonCalculations } from '../db/schema';[m
+[31m-import { eq, desc } from 'drizzle-orm';[m
+[31m-import { z } from 'zod';[m
+[31m-import { authenticateToken, USER_ROLES, requireRole } from '../middleware/auth';[m
+[31m-[m
+[31m-const router = Router();[m
+[31m-[m
+[31m-// 台灣時間工具函數[m
+[31m-function getTaiwanDate(): string {[m
+[31m-  const now = new Date();[m
+[31m-  // 轉換為台灣時間 (UTC+8)[m
+[31m-  const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));[m
+[31m-  return taiwanTime.toISOString().split('T')[0];[m
+[31m-}[m
+[31m-[m
+[31m-function getTaiwanDateTime(): string {[m
+[31m-  const now = new Date();[m
+[31m-  // 轉換為台灣時間 (UTC+8)[m
+[31m-  const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));[m
+[31m-  return taiwanTime.toISOString();[m
+[31m-}[m
+[31m-[m
+[31m-function getTaiwanTimestamp(): number {[m
+[31m-  const now = new Date();[m
+[31m-  // 轉換為台灣時間 (UTC+8)[m
+[31m-  const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));[m
+[31m-  return taiwanTime.getTime();[m
+[31m-}[m
+[31m-[m
+[31m-function getTaiwanTimestampForDB(): Date {[m
+[31m-  const now = new Date();[m
+[31m-  // 轉換為台灣時間 (UTC+8) 並設定時區[m
+[31m-  const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));[m
+[31m-  return taiwanTime;[m
+[31m-}[m
+[31m-[m
+[31m-// 處理每日資料的函數[m
+[31m-function processDailyData(calculations: any[]) {[m
+[31m-  // 按日期分組[m
+[31m-  const dailyGroups: { [key: string]: any[] } = {};[m
+[31m-  [m
+[31m-  calculations.forEach(record => {[m
+[31m-    const date = record.calculationDate;[m
+[31m-    if (!dailyGroups[date]) {[m
+[31m-      dailyGroups[date] = [];[m
+[31m-    }[m
+[31m-    dailyGroups[date].push(record);[m
+[31m-  });[m
+[31m-[m
+[31m-  // 計算每日統計和累加排放量[m
+[31m-  const processedDailyGroups = Object.keys(dailyGroups)[m
+[31m-    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime()) // 按日期降序排列[m
+[31m-    .map(date => {[m
+[31m-      const dayRecords = dailyGroups[date];[m
+[31m-      const dailyTotalEmission = dayRecords.reduce((sum, record) => sum + record.totalEmission, 0);[m
+[31m-      [m
+[31m-      // 計算排放種類占比[m
+[31m-      const emissionBreakdown = calculateEmissionBreakdown(dayRecords);[m
+[31m-      [m
+[31m-      return {[m
+[31m-        date: date,[m
+[31m-        records: dayRecords,[m
+[31m-        dailyTotalEmission: parseFloat(dailyTotalEmission.toFixed(2)),[m
+[31m-        recordCount: dayRecords.length,[m
+[31m-        emissionBreakdown: emissionBreakdown[m
+[31m-      };[m
+[31m-    });[m
+[31m-[m
+[31m-  // 計算總排放量和累加排放量[m
+[31m-  let totalEmission = 0;[m
+[31m-  const dailyGroupsWithCumulative = processedDailyGroups.map(day => {[m
+[31m-    totalEmission += day.dailyTotalEmission;[m
+[31m-    return {[m
+[31m-      ...day,[m
+[31m-      cumulativeEmission: parseFloat(totalEmission.toFixed(2))[m
+[31m-    };[m
+[31m-  });[m
+[31m-[m
+[31m-  // 計算整體排放種類占比[m
+[31m-  const overallEmissionBreakdown = calculateEmissionBreakdown(calculations);[m
+[31m-[m
+[31m-  return {[m
+[31m-    dailyGroups: dailyGroupsWithCumulative,[m
+[31m-    totalEmission: parseFloat(totalEmission.toFixed(2)),[m
+[31m-    emissionBreakdown: overallEmissionBreakdown[m
+[31m-  };[m
+[31m-}[m
+[31m-[m
+[31m-// 計算排放種類占比的函數[m
+[31m-function calculateEmissionBreakdown(records: any[]) {[m
+[31m-  const breakdown = {[m
+[31m-    co2: { total: 0, percentage: 0 },[m
+[31m-    ch4: { total: 0, percentage: 0 },[m
+[31m-    n2o: { total: 0, percentage: 0 },[m
+[31m-    pfcs: { total: 0, percentage: 0 },[m
+[31m-    hfcs: { total: 0, percentage: 0 },[m
+[31m-    sf6: { total: 0, percentage: 0 },[m
+[31m-    nf3: { total: 0, percentage: 0 }[m
+[31m-  };[m
+[31m-[m
+[31m-  // 這裡需要從carbon表獲取係數來計算各類排放量[m
+[31m-  // 由於我們只有totalEmission，我們需要重新計算各類排放量[m
+[31m-  // 或者我們可以修改資料庫結構來儲存各類排放量[m
+[31m-  [m
+[31m-  // 暫時使用簡化的計算方式[m
+[31m-  records.forEach(record => {[m
+[31m-    // 這裡需要根據carbon表的係數重新計算[m
+[31m-    // 為了演示，我們使用假設的比例[m
+[31m-    breakdown.co2.total += record.totalEmission * 0.6; // 假設CO2佔60%[m
+[31m-    breakdown.ch4.total += record.totalEmission * 0.25; // 假設CH4佔25%[m
+[31m-    breakdown.n2o.total += record.totalEmission * 0.15; // 假設N2O佔15%[m
+[31m-  });[m
+[31m-[m
+[31m-  const total = breakdown.co2.total + breakdown.ch4.total + breakdown.n2o.total + [m
+[31m-                breakdown.pfcs.total + breakdown.hfcs.total + breakdown.sf6.total + breakdown.nf3.total;[m
+[31m-[m
+[31m-  if (total > 0) {[m
+[31m-    breakdown.co2.percentage = parseFloat(((breakdown.co2.total / total) * 100).toFixed(2));[m
+[31m-    breakdown.ch4.percentage = parseFloat(((breakdown.ch4.total / total) * 100).toFixed(2));[m
+[31m-    breakdown.n2o.percentage = parseFloat(((breakdown.n2o.total / total) * 100).toFixed(2));[m
+[31m-    breakdown.pfcs.percentage = parseFloat(((breakdown.pfcs.total / total) * 100).toFixed(2));[m
+[31m-    breakdown.hfcs.percentage = parseFloat(((breakdown.hfcs.total / total) * 100).toFixed(2));[m
+[31m-    breakdown.sf6.percentage = parseFloat(((breakdown.sf6.total / total) * 100).toFixed(2));[m
+[31m-    breakdown.nf3.percentage = parseFloat(((breakdown.nf3.total / total) * 100).toFixed(2));[m
+[31m-  }[m
+[31m-[m
+[31m-  return breakdown;[m
+[31m-}[m
+[31m-[m
+[31m-// 驗證器[m
+[31m-const calculateEmissionSchema = z.object({[m
+[31m-  carbonId: z.string().min(1, '碳排係數ID不能為空'),[m
+[31m-  consumption: z.number().positive('消耗量必須大於0'),[m
+[31m-  calculationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式必須為 YYYY-MM-DD').optional(),[m
+[31m-});[m
+[31m-[m
+[31m-// 取得所有可用的燃料選單[m
+[31m-//也就是使用者選擇要記錄的燃料的選單[m
+[31m-router.get('/fuels', async (_req, res) => {[m
+[31m-  try {[m
+[31m-    console.log('🔍 取得燃料選單...');[m
+[31m-    [m
+[31m-    const fuels = await db.select({[m
+[31m-      id: carbon.id,[m
+[31m-      name: carbon.fuelName,[m
+[31m-      unit: carbon.unit,[m
+[31m-    }).from(carbon);[m
+[31m-[m
+[31m-    console.log(`✅ 成功取得 ${fuels.length} 種燃料`);[m
+[31m-    [m
+[31m-    res.json({[m
+[31m-      success: true,[m
+[31m-      data: fuels,[m
+[31m-      message: `成功取得 ${fuels.length} 種燃料選單`[m
+[31m-    });[m
+[31m-[m
+[31m-  } catch (error) {[m
+[31m-    console.error('❌ 取得燃料選單時發生錯誤:', error);[m
+[31m-    res.status(500).json({[m
+[31m-      success: false,[m
+[31m-      message: '取得燃料選單失敗',[m
+[31m-      error: error instanceof Error ? error.message : '未知錯誤'[m
+[31m-    });[m
+[31m-  }[m
+[31m-});[m
+[31m-[m
+[31m-// 記錄能源消耗並計算碳排量[m
+[31m-//也就是recordEnergyConsume 手動輸入(目前沒有依賴設備)[m
+[31m-router.post('/recordEnergyConsume', authenticateToken, async (req, res) => {[m
+[31m-  try {[m
+[31m-    console.log('🧮 開始記錄能源消耗並計算碳排量...');[m
+[31m-    [m
+[31m-    // 驗證輸入資料[m
+[31m-    const validationResult = calculateEmissionSchema.safeParse(req.body);[m
+[31m-    if (!validationResult.success) {[m
+[31m-      return res.status(400).json({[m
+[31m-        success: false,[m
+[31m-        message: '輸入資料驗證失敗',[m
+[31m-        errors: validationResult.error.errors[m
+[31m-      });[m
+[31m-    }[m
+[31m-[m
+[31m-    const { carbonId, consumption, calculationDate } = validationResult.data;[m
+[31m-    const userId = (req as any).user?.id; // 假設從認證中間件取得使用者ID[m
+[31m-[m
+[31m-    if (!userId) {[m
+[31m-      return res.status(401).json({[m
+[31m-        success: false,[m
+[31m-        message: '使用者未認證'[m
+[31m-      });[m
+[31m-    }[m
+[31m-[m
+[31m-    console.log(`📊 計算參數: carbonId=${carbonId}, consumption=${consumption}, userId=${userId}`);[m
+[31m-[m
+[31m-    // 從carbon表取得係數資料[m
+[31m-    const carbonData = await db.select().from(carbon).where(eq(carbon.id, carbonId));[m
+[31m-    [m
+[31m-    if (carbonData.length === 0) {[m
+[31m-      return res.status(404).json({[m
+[31m-        success: false,[m
+[31m-        message: '找不到指定的碳排係數資料'[m
+[31m-      });[m
+[31m-    }[m
+[31m-[m
+[31m-    const fuel = carbonData[0];[m
+[31m-    console.log(`🔍 找到燃料: ${fuel.fuelName}`);[m
+[31m-[m
+[31m-    // 計算各種排放量 (消耗量 × 係數)[m
+[31m-    const co2Emission = fuel.co2 ? consumption * fuel.co2 : 0;[m
+[31m-    const ch4Emission = fuel.ch4 ? consumption * fuel.ch4 : 0;[m
+[31m-    const n2oEmission = fuel.n2o ? consumption * fuel.n2o : 0;[m
+[31m-    const pfcsEmission = fuel.pfcs ? consumption * fuel.pfcs : 0;[m
+[31m-    const hfcsEmission = fuel.hfcs ? consumption * fuel.hfcs : 0;[m
+[31m-    const sf6Emission = fuel.sf6 ? consumption * fuel.sf6 : 0;[m
+[31m-    const nf3Emission = fuel.nf3 ? consumption * fuel.nf3 : 0;[m
+[31m-[m
+[31m-    console.log('📈 計算排放量:');[m
+[31m-    console.log(`  CO2: ${co2Emission} (${fuel.co2} × ${consumption})`);[m
+[31m-    console.log(`  CH4: ${ch4Emission} (${fuel.ch4} × ${consumption})`);[m
+[31m-    console.log(`  N2O: ${n2oEmission} (${fuel.n2o} × ${consumption})`);[m
+[31m-    console.log(`  PFCs: ${pfcsEmission} (${fuel.pfcs} × ${consumption})`);[m
+[31m-    console.log(`  HFCs: ${hfcsEmission} (${fuel.hfcs} × ${consumption})`);[m
+[31m-    console.log(`  SF6: ${sf6Emission} (${fuel.sf6} × ${consumption})`);[m
+[31m-    console.log(`  NF3: ${nf3Emission} (${fuel.nf3} × ${consumption})`);[m
+[31m-[m
+[31m-    // 計算GWP加權排放量 (排放量 × GWP值)[m
+[31m-    const co2GwpEmission = co2Emission * (fuel.co2gwp || 0);[m
+[31m-    const ch4GwpEmission = ch4Emission * (fuel.ch4gwp || 0);[m
+[31m-    const n2oGwpEmission = n2oEmission * (fuel.n2ogwp || 0);[m
+[31m-    const pfcsGwpEmission = pfcsEmission * (fuel.pfcsgwp || 0);[m
+[31m-    const hfcsGwpEmission = hfcsEmission * (fuel.hfcsgwp || 0);[m
+[31m-    const sf6GwpEmission = sf6Emission * (fuel.sf6gwp || 0);[m
+[31m-    const nf3GwpEmission = nf3Emission * (fuel.nf3gwp || 0);[m
+[31m-[m
+[31m-    console.log('⚖️ 計算GWP加權排放量:');[m
+[31m-    console.log(`  CO2 GWP: ${co2GwpEmission} (${co2Emission} × ${fuel.co2gwp})`);[m
+[31m-    console.log(`  CH4 GWP: ${ch4GwpEmission} (${ch4Emission} × ${fuel.ch4gwp})`);[m
+[31m-    console.log(`  N2O GWP: ${n2oGwpEmission} (${n2oEmission} × ${fuel.n2ogwp})`);[m
+[31m-    console.log(`  PFCs GWP: ${pfcsGwpEmission} (${pfcsEmission} × ${fuel.pfcsgwp})`);[m
+[31m-    console.log(`  HFCs GWP: ${hfcsGwpEmission} (${hfcsEmission} × ${fuel.hfcsgwp})`);[m
+[31m-    console.log(`  SF6 GWP: ${sf6GwpEmission} (${sf6Emission} × ${fuel.sf6gwp})`);[m
+[31m-    console.log(`  NF3 GWP: ${nf3GwpEmission} (${nf3Emission} × ${fuel.nf3gwp})`);[m
+[31m-[m
+[31m-    // 計算總排放量 (所有GWP加權排放量之和)[m
+[31m-    const totalEmission = co2GwpEmission + ch4GwpEmission + n2oGwpEmission + [m
+[31m-                         pfcsGwpEmission + hfcsGwpEmission + sf6GwpEmission + nf3GwpEmission;[m
+[31m-[m
+[31m-    console.log(`🎯 總排放量: ${totalEmission}`);[m
+[31m-[m
+[31m-    // 存入carbon_calculations表的total_emission欄位[m
+[31m-    const calculationResult = await db.insert(carbonCalculations).values({[m
+[31m-      userId: userId,[m
+[31m-      carbonId: carbonId,[m
+[31m-      fuelName: fuel.fuelName || '',[m
+[31m-      consumption: consumption,[m
+[31m-      unit: fuel.unit || '',[m
+[31m-      totalEmission: totalEmission, // 儲存到total_emission欄位[m
+[31m-      calculationDate: calculationDate || getTaiwanDate(), // 使用指定的日期或台灣今天的日期[m
+[31m-      createdAt: getTaiwanTimestampForDB(), // 使用台灣時間設定創建時間[m
+[31m-      notes: `能源消耗記錄: ${fuel.fuelName} 消耗量 ${consumption} ${fuel.unit}，totalEmission總共是 ${totalEmission.toFixed(2)} 公噸/年`[m
+[31m-    }).returning();[m
+[31m-[m
+[31m-    console.log(`✅ 能源消耗記錄已存入資料庫，total_emission: ${totalEmission}，ID: ${calculationResult[0].id}`);[m
+[31m-[m
+[31m-    // 回傳計算結果[m
+[31m-    res.json({[m
+[31m-      success: true,[m
+[31m-      data: {[m
+[31m-        calculationId: calculationResult[0].id,[m
+[31m-        fuelName: fuel.fuelName,[m
+[31m-        consumption: consumption,[m
+[31m-        unit: fuel.unit,[m
+[31m-        totalEmission: totalEmission,[m
+[31m-        calculationDate: calculationResult[0].calculationDate,[m
+[31m-        details: {[m
+[31m-          emissions: {[m
+[31m-            co2: co2Emission,[m
+[31m-            ch4: ch4Emission,[m
+[31m-            n2o: n2oEmission,[m
+[31m-            pfcs: pfcsEmission,[m
+[31m-            hfcs: hfcsEmission,[m
+[31m-            sf6: sf6Emission,[m
+[31m-            nf3: nf3Emission[m
+[31m-          },[m
+[31m-          gwpEmissions: {[m
+[31m-            co2: co2GwpEmission,[m
+[31m-            ch4: ch4GwpEmission,[m
+[31m-            n2o: n2oGwpEmission,[m
+[31m-            pfcs: pfcsGwpEmission,[m
+[31m-            hfcs: hfcsGwpEmission,[m
+[31m-            sf6: sf6GwpEmission,[m
+[31m-            nf3: nf3GwpEmission[m
+[31m-          }[m
+[31m-        }[m
+[31m-      },[m
+[31m-      message: '能源消耗記錄完成'[m
+[31m-    });[m
+[31m-[m
+[31m-  } catch (error) {[m
+[31m-    console.error('❌ 記錄能源消耗時發生錯誤:', error);[m
+[31m-    res.status(500).json({[m
+[31m-      success: false,[m
+[31m-      message: '記錄能源消耗失敗',[m
+[31m-      error: error instanceof Error ? error.message : '未知錯誤'[m
+[31m-    });[m
+[31m-  }[m
+[31m-});[m
+[31m-[m
+[31m-// 取得計算記錄 (員工只能看自己的，老闆可以看所有人的)[m
+[31m-router.get('/my-calculations', authenticateToken, async (req, res) => {[m
+[31m-  try {[m
+[31m-    const userId = req.user?.id;[m
+[31m-    const userRole = req.user?.role;[m
+[31m-[m
+[31m-    if (!userId) {[m
+[31m-      return res.status(401).json({[m
+[31m-        success: false,[m
+[31m-        message: '使用者未認證'[m
+[31m-      });[m
+[31m-    }[m
+[31m-[m
+[31m-    let calculations;[m
+[31m-    [m
+[31m-    if (userRole === USER_ROLES.BOSS) {[m
+[31m-      // 老闆可以查看所有員工的記錄[m
+[31m-      console.log(`🔍 老闆 ${userId} 查看所有計算記錄...`);[m
+[31m-      calculations = await db.select().from(carbonCalculations)[m
+[31m-        .orderBy(desc(carbonCalculations.calculationDate), desc(carbonCalculations.createdAt));[m
+[31m-    } else {[m
+[31m-      // 員工只能查看自己的記錄[m
+[31m-      console.log(`🔍 員工 ${userId} 查看自己的計算記錄...`);[m
+[31m-      calculations = await db.select().from(carbonCalculations)[m
+[31m-        .where(eq(carbonCalculations.userId, userId))[m
+[31m-        .orderBy(desc(carbonCalculations.calculationDate), desc(carbonCalculations.createdAt));[m
+[31m-    }[m
+[31m-[m
+[31m-    console.log(`✅ 找到 ${calculations.length} 筆計算記錄`);[m
+[31m-[m
+[31m-    // 按天分區處理資料[m
+[31m-    const dailyData = processDailyData(calculations);[m
+[31m-[m
+[31m-    res.json({[m
+[31m-      success: true,[m
+[31m-      data: {[m
+[31m-        dailyData: dailyData.dai

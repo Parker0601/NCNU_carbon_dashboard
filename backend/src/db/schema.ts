@@ -102,6 +102,26 @@ export const carbon = pgTable('carbon', {
   nf3gwp: integer('NF3gwp'),
 });
 
+// carbon_calculations table - 記錄使用者輸入消耗量後的計算結果
+export const carbonCalculations = pgTable('carbon_calculations', {
+  id: serial('id').primaryKey().notNull(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  carbonId: varchar('carbon_id').notNull().references(() => carbon.id), // 參考carbon表的係數
+  fuelName: text('fuel_name').notNull(), // 燃料名稱 (從carbon表複製)
+  consumption: doublePrecision('consumption').notNull(), // 使用者輸入的消耗量
+  unit: text('unit').notNull(), // 單位 (從carbon表複製)
+  
+  // 計算結果
+  totalEmission: doublePrecision('total_emission').notNull(), // 總排放量 (消耗量 × 係數計算結果)
+  
+  // 時間戳記
+  calculationDate: date('calculation_date').notNull(), // 計算日期
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(), // 創建時間 (支援時區)
+  
+  // 備註
+  notes: text('notes'), // 備註或說明
+});
+
 // 關聯（可依需求擴充）
 export const usersRelations = relations(users, ({ many }) => ({
   scraps: many(scraps),
@@ -109,6 +129,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   issuesAssigned: many(issues, { relationName: 'assigner' }),
   maintenanceRecords: many(maintenanceRecords),
   schedule: many(schedule),
+  carbonCalculations: many(carbonCalculations),
 }));
 
 export const devicesRelations = relations(devices, ({ many }) => ({
@@ -141,4 +162,13 @@ export const scheduleRelations = relations(schedule, ({ one }) => ({
 
 export const energyRecordRelations = relations(energyRecord, ({ one }) => ({
   device: one(devices, { fields: [energyRecord.deviceId], references: [devices.id] }),
+}));
+
+export const carbonRelations = relations(carbon, ({ many }) => ({
+  calculations: many(carbonCalculations),
+}));
+
+export const carbonCalculationsRelations = relations(carbonCalculations, ({ one }) => ({
+  user: one(users, { fields: [carbonCalculations.userId], references: [users.id] }),
+  carbon: one(carbon, { fields: [carbonCalculations.carbonId], references: [carbon.id] }),
 }));

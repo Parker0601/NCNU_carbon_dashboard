@@ -49,7 +49,9 @@ router.get('/status', async (_req: Request, res: Response) => {
       .select({
         id: devices.id,
         status: devices.status,
-        name: devices.name
+        name: devices.name,
+        bootTime: devices.bootTime,
+        ratio: devices.ratio
       })
       .from(devices)
       .orderBy(devices.id);

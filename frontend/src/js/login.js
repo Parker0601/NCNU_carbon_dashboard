@@ -1,6 +1,3 @@
-// login.js
-console.log('login.js loaded');
-
 (function () {
   // 不動你的 API_BASE
   const API_BASE = 'http://localhost:3000/api';
@@ -16,19 +13,6 @@ console.log('login.js loaded');
       .html('已自動填充 <strong>' + $(this).text() + '</strong> 的登入資訊')
       .removeClass('alert-danger alert-success')
       .show();
-  });
-
-  // （可選）老闆快速登入 Demo：若要保留，至少把 userRole 與 access_token 一起寫入
-  $('#boss-quick-login').click(function (e) {
-    e.preventDefault();
-    // Demo 資料（無後端驗證，受保護 API 會 401）
-    localStorage.setItem('userRole', 'boss');
-    localStorage.setItem('userName', '老闆');
-    localStorage.setItem('userID', 'B123');
-    localStorage.setItem('user', JSON.stringify({ id: 'B123', name: '老闆', role: 'boss' }));
-    localStorage.setItem('access_token', 'DEMO_ONLY__NO_SERVER_TOKEN');
-    localStorage.setItem('token', 'DEMO_ONLY__NO_SERVER_TOKEN');
-    window.location.href = 'boss_dashboard.html';
   });
 
   // 送出表單或按鈕點擊皆可觸發

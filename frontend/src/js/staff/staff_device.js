@@ -96,7 +96,7 @@
             <div class="small text-muted mb-2">ID：${id}</div>
             <ul class="list-unstyled mb-3">
               <li>啟動時間：${fmtDateTime(bootTime)}</li>
-              <li>稼動率 (ratio)：${(ratio != null ? (ratio * 100).toFixed(1) : '-') }%</li>
+              <li>稼動率 (ratio)：${(ratio != null ? (ratio).toFixed(1) : '-') }%</li>
             </ul>
             <div class="mt-auto d-flex gap-2">
               <button class="btn btn-sm btn-outline-primary mr-2" data-action="history" data-id="${id}" data-name="${name}"><i class="fal fa-history"></i> 維護歷史</button>

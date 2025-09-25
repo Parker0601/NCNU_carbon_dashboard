@@ -11,10 +11,10 @@ const NAV: Record<Role, NavItem[]> = {
   boss: [
     { href: 'boss_dashboard.html', text: '總覽畫面', pagename: 'boss_dashboard' },
     { href: 'boss_carbon_trading.html', text: '碳信用交易', pagename: 'boss_carbon_trading' },
-    { href: 'boss_finance_report.html', text: '财务绩效报表', pagename: 'boss_finance_report' },
+    { href: 'boss_finance_report.html', text: '財務績效報表', pagename: 'boss_finance_report' },
     { href: 'boss_compliance_tracking.html', text: '合規與驗證追蹤', pagename: 'boss_compliance_tracking' },
     { href: 'boss_risk_center.html', text: '風險中心', pagename: 'boss_risk_center' },
-    { href: 'boss_staff_promotion.html', text: '員工升級管理', pagename: 'boss_employee_promotion' }, // 修正一致性
+    { href: 'boss_upgrade.html', text: '員工升級管理', pagename: 'boss_upgrade' }, 
   ],
   manager: [
     { href: 'manager_overview.html', text: '總覽', pagename: 'manager_overview' },
@@ -23,7 +23,6 @@ const NAV: Record<Role, NavItem[]> = {
     { href: 'manager_carbon.html', text: '碳排放概況', pagename: 'manager_carbon' },
     { href: 'manager_performance.html', text: '部門績效', pagename: 'manager_performance' },
     { href: 'manager_resource.html', text: '資源使用監測', pagename: 'manager_resource' },
-    { href: 'scrap_overview.html', text: '廢料管理總覽', pagename: 'manager_scrap_overview'},
   ],
   employee: [
     { href: 'staff_device.html', text: '設備管理', pagename: 'staff_device' },

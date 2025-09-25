@@ -36,6 +36,7 @@
         <!-- 員工列表 -->
         <div class="table-container">
           <h3 class="mb-2">員工列表</h3>
+          <div id="js-upgrade-alert" class="alert" role="alert" style="display:none"></div>
           <div class="table-responsive">
             <table class="table table-sm table-striped">
               <thead>
@@ -52,7 +53,8 @@
           </div>
         </div>
 
-        <!-- 審核列表 -->
+        {{!-- 審核列表 - 已註解，老闆可直接升級員工 --}}
+        {{!--
         <div class="table-container">
           <h3 class="mb-2">審核列表</h3>
           <div class="table-responsive">
@@ -71,6 +73,7 @@
             </table>
           </div>
         </div>
+        --}}
 
         {{!-- ================== 前端用 Handlebars 模板 ================== --}}
         <!-- 注意：用 [[ ]] 包住，避免被外層 HBS 先吃掉 -->
@@ -81,12 +84,14 @@
             <td>[[name]]</td>
             <td>[[position]]</td>
             <td>
-              <button class="btn btn-primary btn-upgrade" data-id="[[id]]" data-name="[[name]]">升級為主管</button>
+              <button id="js-upgrade-btn-[[id]]" class="btn btn-primary btn-upgrade" data-id="[[id]]" data-name="[[name]]" data-role="2">升級為主管</button>
             </td>
           </tr>
           [[/each]]
         </script>
 
+        {{!-- 審核模板 - 已註解，老闆可直接升級員工 --}}
+        {{!--
         <script id="review-template" type="text/x-handlebars-template">
           [[#each reviews]]
           <tr>
@@ -94,12 +99,13 @@
             <td>[[id]]</td>
             <td>[[position]]</td>
             <td>
-              <button class="btn btn-success btn-approve" data-id="[[id]]">是</button>
-              <button class="btn btn-danger btn-reject" data-id="[[id]]">否</button>
+              <button id="js-approve-btn-[[id]]" class="btn btn-success btn-approve" data-id="[[id]]" data-name="[[name]]">是</button>
+              <button id="js-reject-btn-[[id]]" class="btn btn-danger btn-reject" data-id="[[id]]" data-name="[[name]]">否</button>
             </td>
           </tr>
           [[/each]]
         </script>
+        --}}
 
       </div>
     </div>
@@ -109,10 +115,8 @@
 
 {{!-- 3) SCRIPTS：先載 Handlebars（CDN），再載你現有的 bundle 與 page JS --}}
 {{#*inline "scripts-block"}}
-<script src="https://cdn.jsdelivr.net/npm/handlebars@latest/dist/handlebars.min.js"></script>
-<script src="/js/vendors.bundle.js"></script>
-<script src="/js/app.bundle.js"></script>
-<script src="/js/boss/boss_staff_promotion.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.7.7/handlebars.min.js"></script>
+<script src="js/boss/boss_upgrade.js"></script>
 {{/inline}}
 
 {{/layouts/main}}

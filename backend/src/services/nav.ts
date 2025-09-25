@@ -29,7 +29,8 @@ const NAV: Record<Role, NavItem[]> = {
     { href: 'staff_issue.html', text: '問題回報', pagename: 'staff_issue' },
     { href: 'staff_energy.html', text: '能源管理', pagename: 'staff_energy' },
     { href: 'staff_schedule.html', text: '排程管理', pagename: 'staff_schedule' },
-    { href: 'waste_management.html', text: '廢棄物管理', pagename: 'waste_management' }
+    { href: 'waste_management.html', text: '廢棄物管理', pagename: 'waste_management' },
+    { href: 'scrap_overview.html', text: '廢料管理總覽', pagename: 'manager_scrap_overview'},
   ],
 };
 

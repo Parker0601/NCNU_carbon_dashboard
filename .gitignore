@@ -16,7 +16,8 @@ yarn-error.log*
 /build/
 
 # Frontend specific
-/frontend/dist/
+/frontend/dist/*.html
+/frontend/dist/**/*.html
 /frontend/node_modules/
 # Logs
 logs/

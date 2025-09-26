@@ -23,6 +23,7 @@ const NAV: Record<Role, NavItem[]> = {
     { href: 'manager_carbon.html', text: '碳排放概況', pagename: 'manager_carbon' },
     { href: 'manager_performance.html', text: '部門績效', pagename: 'manager_performance' },
     { href: 'manager_resource.html', text: '資源使用監測', pagename: 'manager_resource' },
+    { href: 'scrap_overview.html', text: '廢料管理總覽', pagename: 'manager_scrap_overview'},
   ],
   employee: [
     { href: 'staff_device.html', text: '設備管理', pagename: 'staff_device' },
@@ -30,7 +31,6 @@ const NAV: Record<Role, NavItem[]> = {
     { href: 'staff_energy.html', text: '能源管理', pagename: 'staff_energy' },
     { href: 'staff_schedule.html', text: '排程管理', pagename: 'staff_schedule' },
     { href: 'waste_management.html', text: '廢棄物管理', pagename: 'waste_management' },
-    { href: 'scrap_overview.html', text: '廢料管理總覽', pagename: 'manager_scrap_overview'},
   ],
 };
 

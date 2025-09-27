@@ -291,6 +291,54 @@ router.get('/:id/maintenance', async (req: Request, res: Response) => {
 });
 
 // ===========================================
+// listIssues - 列出問題清單（可選 deviceId / assigned=me）
+// ===========================================
+router.get('/issues', async (req: Request, res: Response) => {
+  try {
+    const deviceId = req.query.deviceId ? Number(req.query.deviceId) : null;
+    const assignedMe = req.query.assigned === 'me';
+
+    // 這裡使用你現有的 camelCase 欄位命名（對應 drizzle schema）
+    // issues: id, deviceId, description, issuer, assigner, status, createTime
+    // devices: id, name
+    // users:   id, name
+    const q = db
+      .select({
+        id: issues.id,
+        deviceId: issues.deviceId,
+        description: issues.description,
+        status: issues.status,              // '1' | '2' | '3'
+        createTime: issues.createTime,
+        assignerId: issues.assigner,        // ★ 注意是 assigner，不是 assignee
+        assignerName: users.name,           // 目前用「指派人」名稱當作清單欄位（先頂著）
+        deviceName: devices.name
+      })
+      .from(issues)
+      .leftJoin(devices, eq(issues.deviceId, devices.id))
+      .leftJoin(users, eq(issues.assigner, users.id))   // ★ 這裡也用 assigner
+      .orderBy(desc(issues.createTime));
+
+    let rows = await q;
+
+    if (deviceId) {
+      rows = rows.filter(r => r.deviceId === deviceId);
+    }
+
+    if (assignedMe) {
+      if (!req.user) {
+        return errorResponse(res, 'User not authenticated', 401);
+      }
+      rows = rows.filter(r => r.assignerId === req.user!.id);
+    }
+
+    return successResponse(res, rows, 'Issues retrieved successfully');
+  } catch (error) {
+    console.error('[GET /api/devices/issues] error:', error);
+    return errorResponse(res, 'Failed to get issues', 500);
+  }
+});
+
+// ===========================================
 // 7. 獲取特定設備資訊
 // ===========================================
 router.get('/:id', async (req: Request, res: Response) => {
@@ -347,6 +395,8 @@ router.put('/:id/status', async (req: Request, res: Response) => {
     return errorResponse(res, 'Failed to update device status', 500);
   }
 });
+
+
 
 // ===========================================
 // 9. 獲取維護統計

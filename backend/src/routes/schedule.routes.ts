@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
-import { and, desc, eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { db } from '@/db';
-import { schedule, users, devices } from '@/db/schema';
-import { authenticateToken, requireUser } from '@/middleware/auth';
+import { devices, issues, users } from '@/db/schema';
+import { authenticateToken, requireUser, requireAdmin } from '@/middleware/auth';
 import { successResponse, errorResponse, notFoundResponse } from '@/utils/responses';
 import { z } from 'zod';
 
@@ -13,128 +13,121 @@ router.use(authenticateToken);
 router.use(requireUser);
 
 // 驗證 schema
-const createScheduleSchema = z.object({
-  userId: z.number().int().positive().optional(), // 預設使用登入者 id
-  deviceId: z.number().int().optional().nullable(),
-  title: z.string().min(1),
-  description: z.string().optional(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
-  startTime: z.string(), // 'YYYY-MM-DD HH:mm:ss' 或 ISO，交由 DB 解析
-  endTime: z.string(),
-  status: z.enum(['assigned', 'accepted', 'submitted', 'approved', 'rejected']).optional(),
-});
-
-const updateStatusSchema = z.object({
-  status: z.enum(['assigned', 'accepted', 'submitted', 'approved', 'rejected']),
+const assignHumanResourceSchema = z.object({
+  issueId: z.number().int().positive(),
+  assignerId: z.number().int().positive(),
 });
 
 // ===========================================
-// GET /api/schedule - 列出行程（可選 query: userId、自身）
+// GET /api/schedule/assign-human-resource - 主管查看故障設備和可指派員工
 // ===========================================
-router.get('/', async (req: Request, res: Response) => {
+router.get('/assign-human-resource', requireAdmin, async (_req: Request, res: Response) => {
   try {
-    const queryUserId = req.query.userId ? Number(req.query.userId) : undefined;
-    const useSelf = req.query.self === 'true' || req.query.self === '1';
-    const finalUserId = useSelf ? req.user!.id : queryUserId;
-
-    const q = db
+    // 1. 獲取故障設備 (device_status = '3')
+    const faultyDevices = await db
       .select({
-        id: schedule.id,
-        userId: schedule.userId,
-        deviceId: schedule.deviceId,
-        title: schedule.title,
-        description: schedule.description,
-        date: schedule.date,
-        startTime: schedule.startTime,
-        endTime: schedule.endTime,
-        status: schedule.status,
+        deviceId: devices.id,
+        deviceName: devices.name,
+        deviceStatus: devices.status,
+        bootTime: devices.bootTime,
+        ratio: devices.ratio
+      })
+      .from(devices)
+      .where(eq(devices.status, '3')); // 3: 故障
+
+    // 2. 獲取所有員工 (role = '1') 及其狀態
+    const availableStaff = await db
+      .select({
+        userId: users.id,
         userName: users.name,
+        userRole: users.role,
+        userStatus: users.status, // 假設已新增此欄位
+        mail: users.mail
       })
-      .from(schedule)
-      .leftJoin(users, eq(users.id, schedule.userId))
-      .orderBy(desc(schedule.startTime));
+      .from(users)
+      .where(eq(users.role, '1')); // 1: 一般員工
 
-    let rows = await q;
-    if (finalUserId) {
-      rows = rows.filter(r => r.userId === finalUserId);
-    }
+    // 3. 獲取現有的問題記錄
+    const existingIssues = await db
+      .select({
+        issueId: issues.id,
+        deviceId: issues.deviceId,
+        description: issues.description,
+        status: issues.status,
+        assignerId: issues.assigner,
+        createTime: issues.createTime
+      })
+      .from(issues)
+      .where(eq(issues.status, '1')); // 1: 待處理
 
-    return successResponse(res, rows, 'Schedules retrieved successfully');
+    return successResponse(res, {
+      faultyDevices,
+      availableStaff,
+      existingIssues
+    }, 'Human resource assignment data retrieved successfully');
   } catch (error) {
-    return errorResponse(res, 'Failed to get schedules', 500);
+    return errorResponse(res, 'Failed to get human resource assignment data', 500);
   }
 });
 
 // ===========================================
-// POST /api/schedule - 新增行程
+// POST /api/schedule/assign-human-resource - 主管指派員工處理設備問題
 // ===========================================
-router.post('/', async (req: Request, res: Response) => {
+router.post('/assign-human-resource', requireAdmin, async (req: Request, res: Response) => {
   try {
     if (!req.user) {
       return errorResponse(res, 'User not authenticated', 401);
     }
 
-    const body = createScheduleSchema.parse(req.body);
+    const { issueId, assignerId } = assignHumanResourceSchema.parse(req.body);
 
-    const insertUserId = body.userId ?? req.user.id;
+    // 檢查問題是否存在
+    const [existingIssue] = await db
+      .select()
+      .from(issues)
+      .where(eq(issues.id, issueId));
 
-    // 若有 deviceId 可選檢查設備存在性（此處先略過為輕量骨架）
+    if (!existingIssue) {
+      return notFoundResponse(res, 'Issue not found');
+    }
 
-    const [row] = await db
-      .insert(schedule)
-      .values({
-        userId: insertUserId,
-        deviceId: body.deviceId ?? null,
-        title: body.title,
-        description: body.description ?? null,
-        date: body.date as any,
-        startTime: body.startTime as any,
-        endTime: body.endTime as any,
-        status: (body.status ?? 'assigned') as any,
+    // 檢查指派員工是否存在且為一般員工
+    const [assignee] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.id, assignerId), eq(users.role, '1')));
+
+    if (!assignee) {
+      return errorResponse(res, 'Invalid assignee or user is not a staff member', 400);
+    }
+
+    // 更新問題的 assigner
+    const [updatedIssue] = await db
+      .update(issues)
+      .set({
+        assigner: assignerId,
+        status: '2' // 2: 處理中
       })
+      .where(eq(issues.id, issueId))
       .returning();
 
-    return successResponse(res, row, 'Schedule created successfully', 201);
+    // 更新員工狀態為忙碌
+    await db
+      .update(users)
+      .set({ status: 'busy' })
+      .where(eq(users.id, assignerId));
+
+    return successResponse(res, {
+      issueId: updatedIssue.id,
+      assignerId: updatedIssue.assigner,
+      status: updatedIssue.status,
+      message: 'Staff member assigned successfully'
+    }, 'Staff member assigned to issue successfully', 201);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return errorResponse(res, error.issues.map(i => i.message).join('; '), 400);
     }
-    return errorResponse(res, 'Failed to create schedule', 500);
-  }
-});
-
-// ===========================================
-// PATCH /api/schedule/:id/status - 更新行程狀態
-// ===========================================
-router.patch('/:id/status', async (req: Request, res: Response) => {
-  try {
-    if (!req.user) {
-      return errorResponse(res, 'User not authenticated', 401);
-    }
-
-    const id = Number(req.params['id']);
-    if (!Number.isInteger(id) || id <= 0) {
-      return errorResponse(res, 'Invalid schedule id', 400);
-    }
-
-    const { status } = updateStatusSchema.parse(req.body);
-
-    const [updated] = await db
-      .update(schedule)
-      .set({ status: status as any })
-      .where(eq(schedule.id, id))
-      .returning();
-
-    if (!updated) {
-      return notFoundResponse(res, 'Schedule not found');
-    }
-
-    return successResponse(res, updated, 'Schedule status updated successfully');
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return errorResponse(res, error.issues.map(i => i.message).join('; '), 400);
-    }
-    return errorResponse(res, 'Failed to update schedule status', 500);
+    return errorResponse(res, 'Failed to assign staff member', 500);
   }
 });
 

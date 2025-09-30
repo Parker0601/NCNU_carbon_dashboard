@@ -15,6 +15,7 @@ export const users = pgTable('users', {
   password: text('password').notNull(),
   role: userRoleEnum('role').notNull(),
   mail: text('mail'),
+  status: text('status'), // 員工狀態: 'idle' | 'busy' | null (只有 role=1 會用到)
   createTime: timestamp('create_time').notNull(),
 });
 
@@ -45,7 +46,7 @@ export const issues = pgTable('issues', {
   deviceId: integer('device_id').notNull().references(() => devices.id),
   description: text('description'),
   issuer: integer('issuer').notNull().references(() => users.id),
-  assigner: integer('assigner').notNull().references(() => users.id),
+  assigner: integer('assigner').references(() => users.id),
   status: issueStatusEnum('status').notNull(),
   createTime: timestamp('create_time').notNull(),
 });

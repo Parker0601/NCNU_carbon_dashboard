@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { carbon } from '@/db/schema';
+import { carbon, carbonCalculations, users } from '@/db/schema';
 import { successResponse, errorResponse } from '@/utils/responses';
 import { authenticateToken, requireReviewer } from '@/middleware/auth';
 
@@ -30,11 +30,23 @@ router.get('/user-carbon-data/:userId', async (req: Request, res: Response) => {
   try {
     const userId = parseInt(req.params['userId'] || '0');
     
-    // 查找特定用戶的碳排資料
+    // 查找特定用戶的碳排計算資料
     const userData = await db
-      .select()
-      .from(carbon)
-      .where(eq(carbon.userId, userId));
+      .select({
+        id: carbonCalculations.id,
+        userId: carbonCalculations.userId,
+        fuelName: carbonCalculations.fuelName,
+        consumption: carbonCalculations.consumption,
+        unit: carbonCalculations.unit,
+        totalEmission: carbonCalculations.totalEmission,
+        calculationDate: carbonCalculations.calculationDate,
+        createdAt: carbonCalculations.createdAt,
+        notes: carbonCalculations.notes,
+        userName: users.name
+      })
+      .from(carbonCalculations)
+      .leftJoin(users, eq(carbonCalculations.userId, users.id))
+      .where(eq(carbonCalculations.userId, userId));
     
     return successResponse(res, userData, 'User carbon data retrieved successfully');
   } catch (error) {
@@ -46,12 +58,12 @@ router.get('/user-carbon-data/:userId', async (req: Request, res: Response) => {
 router.get('/carbon-stats', async (_req: Request, res: Response) => {
   try {
     // 獲取統計資料
-    const totalRecords = await db.select().from(carbon);
+    const totalRecords = await db.select().from(carbonCalculations);
     
     const stats = {
       totalRecords: totalRecords.length,
       totalConsumption: totalRecords.reduce((sum, record) => sum + (record.consumption || 0), 0),
-      totalElectricity: totalRecords.reduce((sum, record) => sum + (record.electricity || 0), 0),
+      totalEmission: totalRecords.reduce((sum, record) => sum + (record.totalEmission || 0), 0),
     };
     
     return successResponse(res, stats, 'Carbon statistics retrieved successfully');

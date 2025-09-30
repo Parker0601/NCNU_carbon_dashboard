@@ -162,7 +162,7 @@ router.post('/maintenance', async (req: Request, res: Response) => {
            deviceId: deviceId,
            description: `維修記錄: ${description}`,
            issuer: req.user.id,
-           assigner: req.user.id,
+           assigner: null, // 暫時不指派，後續用 API 指派維修者
            status: '3', // 3: 已解決 (維修完成)
            createTime: new Date()
          })

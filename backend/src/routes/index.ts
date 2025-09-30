@@ -5,6 +5,7 @@ import adminRoutes from './admin.routes';
 import scrapRoutes from './scrap.routes';
 import deviceRoutes from './device.routes';
 import { navRouter } from './nav.routes';
+import scheduleRoutes from './schedule.routes';
 
 const router = Router();
 
@@ -15,6 +16,7 @@ router.use('/admin', adminRoutes);
 router.use('/devices', deviceRoutes);
 router.use('/nav', navRouter);
 router.use('/scrap', scrapRoutes);
+router.use('/schedule', scheduleRoutes);
 
 // Health check
 router.get('/health', (_req, res) => {

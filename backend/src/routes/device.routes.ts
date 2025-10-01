@@ -98,6 +98,12 @@ router.post('/report-issue', async (req: Request, res: Response) => {
       })
       .returning();
 
+    // 更新設備狀態為故障
+    await db
+      .update(devices)
+      .set({ status: '3' }) // 3: 故障
+      .where(eq(devices.id, deviceId));
+
     return successResponse(res, {
       issueId: newIssue.id,
       deviceId: newIssue.deviceId,

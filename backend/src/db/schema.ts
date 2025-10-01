@@ -70,7 +70,7 @@ export const schedule = pgTable('schedule', {
   description: text('description'),
   date: date('date').notNull(),
   startTime: timestamp('start_time').notNull(),
-  endTime: timestamp('end_time').notNull(),
+  endTime: timestamp('end_time'), // 允許 null，維修完成時才設定
   status: scheduleStatusEnum('status').notNull().default('assigned'),
 });
 

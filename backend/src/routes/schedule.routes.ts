@@ -49,6 +49,7 @@ router.use(requireUser);
 const assignHumanResourceSchema = z.object({
   issueId: z.number().int().positive(),
   assignerId: z.number().int().positive(),
+  endTime: z.string().datetime().optional()
 });
 
 // ===========================================
@@ -140,7 +141,7 @@ router.post('/assign-human-resource', requireAdmin, async (req: Request, res: Re
       return errorResponse(res, 'User not authenticated', 401);
     }
 
-    const { issueId, assignerId } = assignHumanResourceSchema.parse(req.body);
+  const { issueId, assignerId, endTime } = assignHumanResourceSchema.parse(req.body);
 
     // 檢查問題是否存在
     const [existingIssue] = await db
@@ -188,7 +189,7 @@ router.post('/assign-human-resource', requireAdmin, async (req: Request, res: Re
         description: `指派處理設備問題: ${existingIssue.description}`,
         date: new Date().toISOString().split('T')[0],
         startTime: new Date(),
-        endTime: null, // 維修完成時才設定
+        endTime: endTime ? new Date(endTime) : null,
         status: 'assigned'
       })
       .returning();

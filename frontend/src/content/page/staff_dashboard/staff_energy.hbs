@@ -119,115 +119,29 @@
         <div class="mt-3 fuel-tabs">
           <ul class="nav nav-pills mb-3" role="tablist">
             <li class="nav-item">
-              <a class="nav-link active" id="tab-solid-tab" data-toggle="pill" href="#tab-solid" role="tab" aria-controls="tab-solid" aria-selected="true">固態燃料</a>
+              <a class="nav-link active" id="tab-solid-tab" data-toggle="pill" href="#tab-solid" role="tab" aria-controls="tab-solid" aria-selected="true">燃料燃燒</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" id="tab-liquid-tab" data-toggle="pill" href="#tab-liquid" role="tab" aria-controls="tab-liquid" aria-selected="false">液態燃料</a>
+              <a class="nav-link" id="tab-liquid-tab" data-toggle="pill" href="#tab-liquid" role="tab" aria-controls="tab-liquid" aria-selected="false">製程</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" id="tab-gas-tab" data-toggle="pill" href="#tab-gas" role="tab" aria-controls="tab-gas" aria-selected="false">氣態燃料</a>
+              <a class="nav-link" id="tab-gas-tab" data-toggle="pill" href="#tab-gas" role="tab" aria-controls="tab-gas" aria-selected="false">逸散</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" id="tab-mobile-tab" data-toggle="pill" href="#tab-mobile" role="tab" aria-controls="tab-mobile" aria-selected="false">移動源</a>
+              <a class="nav-link" id="tab-mobile-tab" data-toggle="pill" href="#tab-mobile" role="tab" aria-controls="tab-mobile" aria-selected="false">移動</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" id="tab-electricity-tab" data-toggle="pill" href="#tab-electricity" role="tab" aria-controls="tab-electricity" aria-selected="false">電力</a>
+              <a class="nav-link" id="tab-electricity-tab" data-toggle="pill" href="#tab-electricity" role="tab" aria-controls="tab-electricity" aria-selected="false">電力使用</a>
             </li>
           </ul>
           <div class="tab-content">
-            <!-- 固態燃料 -->
+            <!-- 燃料燃燒 (動態載入class=1的燃料) -->
             <div class="tab-pane fade show active" id="tab-solid" role="tabpanel" aria-labelledby="tab-solid-tab">
-              <div class="card fuel-card">
-                <div class="fuel-category-grid">
-                  <!-- 自產煤 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="solid_zichan_mei">自產煤</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="solid_zichan_mei" data-category="solid" min="0" step="0.01">
-                      <span class="unit-label">公噸/年</span>
-                    </div>
-                  </div>
-                  <!-- 無煙煤 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="solid_wuyan_mei">無煙煤</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="solid_wuyan_mei" data-category="solid" min="0" step="0.01">
-                      <span class="unit-label">公噸/年</span>
-                    </div>
-                  </div>
-                  <!-- 焦炭 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="solid_jiaotan">焦炭</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="solid_jiaotan" data-category="solid" min="0" step="0.01">
-                      <span class="unit-label">公噸/年</span>
-                    </div>
-                  </div>
-                  <!-- 煙煤 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="solid_yanmei">煙煤</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="solid_yanmei" data-category="solid" min="0" step="0.01">
-                      <span class="unit-label">公噸/年</span>
-                    </div>
-                  </div>
-                  <!-- 亞煙煤(發電) -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="solid_yanmei_power">亞煙煤(發電)</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="solid_yanmei_power" data-category="solid" min="0" step="0.01">
-                      <span class="unit-label">公噸/年</span>
-                    </div>
-                  </div>
-                  <!-- 亞煙煤(其他) -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="solid_yanmei_other">亞煙煤(其他)</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="solid_yanmei_other" data-category="solid" min="0" step="0.01">
-                      <span class="unit-label">公噸/年</span>
-                    </div>
-                  </div>
-                  <!-- 褐煤 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="solid_humei">褐煤</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="solid_humei" data-category="solid" min="0" step="0.01">
-                      <span class="unit-label">公噸/年</span>
-                    </div>
-                  </div>
-                  <!-- 原料煤 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="solid_yuanliaomei">原料煤</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="solid_yuanliaomei" data-category="solid" min="0" step="0.01">
-                      <span class="unit-label">公噸/年</span>
-                    </div>
-                  </div>
-                  <!-- 油頁岩 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="solid_youyeshan">油頁岩</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="solid_youyeshan" data-category="solid" min="0" step="0.01">
-                      <span class="unit-label">公噸/年</span>
-                    </div>
-                  </div>
-                  <!-- 泥煤 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="solid_nimei">泥煤</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="solid_nimei" data-category="solid" min="0" step="0.01">
-                      <span class="unit-label">公噸/年</span>
-                    </div>
-                  </div>
-                  <!-- 煤球 -->
-                  <div class="form-group row align-items-center mb-4">
-                    <label class="col-sm-4 col-form-label" for="solid_meiqiu">煤球</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="solid_meiqiu" data-category="solid" min="0" step="0.01">
-                      <span class="unit-label">公噸/年</span>
-                    </div>
-                  </div>
+              <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="sr-only">載入中...</span>
                 </div>
+                <p class="mt-2 text-muted">正在載入燃料資料...</p>
               </div>
             </div>
 

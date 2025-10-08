@@ -89,6 +89,7 @@ export const carbon = pgTable('carbon', {
   fuelName: text('Fuel_name'),
   consumption: integer('consumption'),
   unit: text('unit'),
+  class: text('class'), // 新增class欄位
   co2: doublePrecision('CO2'),
   ch4: doublePrecision('CH4'),
   n2o: doublePrecision('N2O'),

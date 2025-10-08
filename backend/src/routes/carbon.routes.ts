@@ -133,6 +133,7 @@ router.get('/fuels', async (_req, res) => {
       id: carbon.id,
       name: carbon.fuelName,
       unit: carbon.unit,
+      class: carbon.class,
     }).from(carbon);
 
     console.log(`✅ 成功取得 ${fuels.length} 種燃料`);
@@ -148,6 +149,36 @@ router.get('/fuels', async (_req, res) => {
     res.status(500).json({
       success: false,
       message: '取得燃料選單失敗',
+      error: error instanceof Error ? error.message : '未知錯誤'
+    });
+  }
+});
+
+// 取得class=1的燃料選單（用於燃料燃燒分頁）
+router.get('/fuels/class-1', async (_req, res) => {
+  try {
+    console.log('🔍 取得class=1的燃料選單...');
+    
+    const fuels = await db.select({
+      id: carbon.id,
+      name: carbon.fuelName,
+      unit: carbon.unit,
+      class: carbon.class,
+    }).from(carbon).where(eq(carbon.class, '1'));
+
+    console.log(`✅ 成功取得 ${fuels.length} 種class=1的燃料`);
+    
+    res.json({
+      success: true,
+      data: fuels,
+      message: `成功取得 ${fuels.length} 種class=1的燃料選單`
+    });
+
+  } catch (error) {
+    console.error('❌ 取得class=1燃料選單時發生錯誤:', error);
+    res.status(500).json({
+      success: false,
+      message: '取得class=1燃料選單失敗',
       error: error instanceof Error ? error.message : '未知錯誤'
     });
   }

@@ -122,7 +122,8 @@
     "gulp": "gulp",
     "start": "npm run gulp",
     "build": "gulp",
-    "dev": "gulp build"
+    "dev": "gulp build",
+    "build:html": "gulp build-html"
   },
   "browserslist": [
     "last 2 versions",

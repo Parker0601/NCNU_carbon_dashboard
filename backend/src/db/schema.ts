@@ -57,7 +57,8 @@ export const maintenanceRecords = pgTable('maintenance_records', {
   id: serial('id').primaryKey().notNull(),
   issueId: integer('issue_id').notNull().references(() => issues.id),
   userId: integer('user_id').notNull().references(() => users.id),
-  description: text('description').notNull(),
+  employeeDescription: text('employee_description'),
+  bossDescription: text('boss_description'),
   createTime: timestamp('create_time').notNull(),
   endTime: timestamp('end_time').notNull(),
 });

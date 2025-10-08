@@ -49,6 +49,7 @@ router.use(requireUser);
 const assignHumanResourceSchema = z.object({
   issueId: z.number().int().positive(),
   assignerId: z.number().int().positive(),
+  endTime: z.string().datetime().optional()
 });
 
 // ===========================================
@@ -140,7 +141,7 @@ router.post('/assign-human-resource', requireAdmin, async (req: Request, res: Re
       return errorResponse(res, 'User not authenticated', 401);
     }
 
-    const { issueId, assignerId } = assignHumanResourceSchema.parse(req.body);
+  const { issueId, assignerId, endTime } = assignHumanResourceSchema.parse(req.body);
 
     // 檢查問題是否存在
     const [existingIssue] = await db
@@ -188,7 +189,7 @@ router.post('/assign-human-resource', requireAdmin, async (req: Request, res: Re
         description: `指派處理設備問題: ${existingIssue.description}`,
         date: new Date().toISOString().split('T')[0],
         startTime: new Date(),
-        endTime: null, // 維修完成時才設定
+        endTime: endTime ? new Date(endTime) : null,
         status: 'assigned'
       })
       .returning();
@@ -337,7 +338,7 @@ router.patch('/accept-task/:scheduleId', async (req: Request, res: Response) => 
  * 
  * 請求參數 (Body):
  * - deviceId: 設備 ID
- * - description: 維修描述
+ * - employee_description: 維修描述（員工回報）
  * - endTime: 維修結束時間
  * 
  * 執行動作：
@@ -358,11 +359,11 @@ router.post('/maintenance', async (req: Request, res: Response) => {
 
     const maintenanceSchema = z.object({
       deviceId: z.number().int().positive(),
-      description: z.string().min(1),
+      employee_description: z.string().min(1),
       endTime: z.string()
     });
 
-    const { deviceId, description, endTime } = maintenanceSchema.parse(req.body);
+    const { deviceId, employee_description, endTime } = maintenanceSchema.parse(req.body);
 
     // 檢查設備是否存在
     const [device] = await db
@@ -391,7 +392,7 @@ router.post('/maintenance', async (req: Request, res: Response) => {
       .values({
         issueId: existingIssue.id,
         userId: req.user.id,
-        description,
+        employeeDescription: employee_description,
         createTime: new Date(),
         endTime: new Date(endTime)
       })
@@ -417,7 +418,7 @@ router.post('/maintenance', async (req: Request, res: Response) => {
     return successResponse(res, {
       maintenanceId: newMaintenance.id,
       deviceId,
-      description: newMaintenance.description,
+      employeeDescription: newMaintenance.employeeDescription,
       createTime: newMaintenance.createTime,
       endTime: newMaintenance.endTime,
       message: 'Maintenance record created successfully'
@@ -455,7 +456,7 @@ router.get('/maintenance-history', async (req: Request, res: Response) => {
         deviceId: devices.id,
         deviceName: devices.name,
         deviceStatus: devices.status,
-        description: maintenanceRecords.description,
+        employeeDescription: maintenanceRecords.employeeDescription,
         createTime: maintenanceRecords.createTime,
         endTime: maintenanceRecords.endTime,
         userName: users.name
@@ -507,7 +508,7 @@ router.get('/pending-review', requireAdmin, async (_req: Request, res: Response)
         userName: users.name,
         deviceName: devices.name,
         maintenanceId: maintenanceRecords.id,
-        maintenanceDescription: maintenanceRecords.description,
+        maintenanceDescription: maintenanceRecords.employeeDescription,
         maintenanceCreateTime: maintenanceRecords.createTime,
         maintenanceEndTime: maintenanceRecords.endTime
       })
@@ -546,8 +547,9 @@ router.get('/pending-review', requireAdmin, async (_req: Request, res: Response)
  * 請求參數 (URL):
  * - scheduleId: schedule 記錄的 ID
  * 
- * 請求參數 (Body):
- * - action: 'approve' (通過) 或 'reject' (退回)
+  * 請求參數 (Body):
+  * - action: 'approve' (通過) 或 'reject' (退回)
+  * - boss_description (可選): 老闆對此次維修的回饋
  * 
  * 執行動作 (action = 'approve' 通過):
  * 1. 更新 schedule.status 為 'approved'
@@ -572,11 +574,12 @@ router.patch('/review/:scheduleId', requireAdmin, async (req: Request, res: Resp
       return errorResponse(res, 'Invalid schedule id', 400);
     }
 
-    const reviewSchema = z.object({
-      action: z.enum(['approve', 'reject'])
+  const reviewSchema = z.object({
+      action: z.enum(['approve', 'reject']),
+      boss_description: z.string().optional()
     });
 
-    const { action } = reviewSchema.parse(req.body);
+    const { action, boss_description } = reviewSchema.parse(req.body);
 
     // 檢查 schedule 是否存在且狀態為 submitted
     const [existingSchedule] = await db
@@ -594,6 +597,40 @@ router.patch('/review/:scheduleId', requireAdmin, async (req: Request, res: Resp
       newStatus = 'approved';
     } else {
       newStatus = 'rejected';
+    }
+
+    // 如有提供老闆回饋，更新最新一筆對應的 maintenance 記錄
+    if (boss_description && existingSchedule.deviceId) {
+      // 尋找對應的 issue（由裝置與被指派者組合）
+      const [relatedIssue] = await db
+        .select({ id: issues.id })
+        .from(issues)
+        .where(and(
+          eq(issues.deviceId, existingSchedule.deviceId),
+          eq(issues.assigner, existingSchedule.userId)
+        ))
+        .orderBy(desc(issues.createTime))
+        .limit(1);
+
+      if (relatedIssue) {
+        // 取得最新一筆維修記錄 id
+        const [latestMaintenance] = await db
+          .select({ id: maintenanceRecords.id })
+          .from(maintenanceRecords)
+          .where(and(
+            eq(maintenanceRecords.issueId, relatedIssue.id),
+            eq(maintenanceRecords.userId, existingSchedule.userId)
+          ))
+          .orderBy(desc(maintenanceRecords.id))
+          .limit(1);
+
+        if (latestMaintenance) {
+          await db
+            .update(maintenanceRecords)
+            .set({ bossDescription: boss_description })
+            .where(eq(maintenanceRecords.id, latestMaintenance.id));
+        }
+      }
     }
 
     // 更新 schedule 狀態

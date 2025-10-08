@@ -46,18 +46,20 @@
             <th class="text-center">操作</th>
           </tr>
         </thead>
-        <tbody>
-          <!-- 由JS動態生成 -->
-        </tbody>
+        <tbody></tbody>
       </table>
     </div>
   </div>
 </div>
+
+<!-- 乾淨的 config 容器（不要在屬性中夾註解） -->
 <div id="app-config"
-     data-api-root="http://localhost:3000/api"  <!-- 建議指到 /api 根 -->
+     data-api-root="http://localhost:3000/api"
      data-login="/index.html"
+     data-user-name="<!-- 可留空；JWT 會自動解析 -->"
      hidden></div>
 {{/inline}}
+
 
 {{#*inline "scripts-block"}}
 <script src="js/notifications/sweetalert2/sweetalert2.bundle.js"></script>

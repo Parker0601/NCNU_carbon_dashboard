@@ -10,99 +10,80 @@
 {{#*inline "head-block"}}
 <link rel="stylesheet" media="screen, print" href="css/notifications/sweetalert2/sweetalert2.bundle.css">
 <link rel="stylesheet" media="screen, print" href="css/datagrid/datatables/datatables.bundle.css">
+<style>
+  .status-badge-idle { background: #e6f4ea; color: #137333; border-radius: .25rem; padding: .15rem .5rem; }
+  .status-badge-busy { background: #fce8e6; color: #c5221f; border-radius: .25rem; padding: .15rem .5rem; }
+</style>
 {{/inline}}
 
 {{#*inline "content-block"}}
 <div class="row">
-    <!-- 左側：機台異常清單 -->
-    <div class="col-xl-6">
-        <div id="panel-1" class="panel">
-            <div class="panel-hdr">
-                <h2>機台異常清單</h2>
-                <div class="panel-toolbar">
-                    <button class="btn btn-panel" data-action="panel-collapse" data-toggle="tooltip" data-offset="0,10" data-original-title="收合"></button>
-                    <button class="btn btn-panel" data-action="panel-fullscreen" data-toggle="tooltip" data-offset="0,10" data-original-title="全螢幕"></button>
-                </div> 
-            </div>
-            <div class="panel-container show">
-                <div class="panel-content">
-                    <div id="alert-list"><!-- JS 會把即時異常渲染到這 --></div>
-                </div>
-            </div>
+  <!-- 左側：機台異常清單 -->
+  <div class="col-xl-6">
+    <div id="panel-1" class="panel">
+      <div class="panel-hdr">
+        <h2>機台異常清單</h2>
+        <div class="panel-toolbar">
+          <button class="btn btn-panel" data-action="panel-collapse" data-toggle="tooltip" data-offset="0,10" data-original-title="收合"></button>
+          <button class="btn btn-panel" data-action="panel-fullscreen" data-toggle="tooltip" data-offset="0,10" data-original-title="全螢幕"></button>
+        </div> 
+      </div>
+      <div class="panel-container show">
+        <div class="panel-content">
+          <div id="alert-list"><!-- JS 動態渲染 --></div>
         </div>
+      </div>
     </div>
+  </div>
 
-    <!-- 右側：任務指派列表 -->
-    <div class="col-xl-6">
-        <div id="panel-2" class="panel">
-            <div class="panel-hdr">
-                <h2>人員任務狀態</h2>
-                <div class="panel-toolbar">
-                    <button class="btn btn-panel" data-action="panel-collapse" data-toggle="tooltip" data-offset="0,10" data-original-title="收合"></button>
-                    <button class="btn btn-panel" data-action="panel-fullscreen" data-toggle="tooltip" data-offset="0,10" data-original-title="全螢幕"></button>
-                </div>
+  <!-- 右側：人員任務狀態（簡化版） -->
+  <div class="col-xl-6">
+    <div id="panel-2" class="panel">
+      <div class="panel-hdr">
+        <h2>人員任務狀態</h2>
+        <div class="panel-toolbar">
+          <div class="input-group">
+            <div class="input-group-prepend">
+              <span class="input-group-text">排序</span>
             </div>
-            <div class="panel-container show">
-                <div class="panel-content">
-                    <table id="dt-staff-tasks" class="table table-bordered table-hover table-striped w-100">
-                        <thead>
-                            <tr>
-                                <th>姓名</th>
-                                <th>狀態</th>
-                                <th>目前任務</th>
-                                <th>操作</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Jerry Wang</td>
-                                <td>
-                                    <select class="form-control status-select">
-                                        <option value="idle" selected>空閒</option>
-                                        <option value="busy">執行中</option>
-                                    </select>
-                                </td>
-                                <td>無</td>
-                                <td>
-                                    <button type="button" class="btn btn-primary btn-sm btn-assign-task" data-staff-id="1">
-                                        指派任務
-                                    </button>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>Mary Chen</td>
-                                <td>
-                                    <select class="form-control status-select">
-                                        <option value="idle">空閒</option>
-                                        <option value="busy" selected>執行中</option>
-                                    </select>
-                                </td>
-                                <td>機台 #2 維護</td>
-                                <td>
-                                    <button type="button" class="btn btn-primary btn-sm btn-assign-task" data-staff-id="2" disabled>
-                                        指派任務
-                                    </button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            <select id="staff-sort-order" class="form-control">
+              <option value="idleFirst" selected>空閒在上（執行中在下）</option>
+              <option value="busyFirst">執行中在上（空閒在下）</option>
+            </select>
+          </div>
+          <button class="btn btn-panel" data-action="panel-collapse" data-toggle="tooltip" data-offset="0,10" data-original-title="收合"></button>
+          <button class="btn btn-panel" data-action="panel-fullscreen" data-toggle="tooltip" data-offset="0,10" data-original-title="全螢幕"></button>
         </div>
+      </div>
+      <div class="panel-container show">
+        <div class="panel-content">
+          <table id="tbl-staff" class="table table-bordered table-hover table-striped w-100 mb-0">
+            <thead>
+              <tr>
+                <th>姓名</th>
+                <th>狀態</th>
+                <th>目前任務</th>
+              </tr>
+            </thead>
+            <tbody><!-- JS 動態渲染 --></tbody>
+          </table>
+        </div>
+      </div>
     </div>
+  </div>
 </div>
-<div id="app-config"
-     data-api-root="http://localhost:3000/api"   <!-- 換成你的 API Base -->
-     data-login="/index.html"                    <!-- 換成你的登入頁路徑 -->
-     hidden></div>
 
+<!-- 全域設定（先保留，可供之後串 API） -->
+<div id="app-config"
+     data-api-root="http://localhost:3000/api"
+     data-login="/index.html"
+     hidden></div>
 {{/inline}}
 
 {{#*inline "scripts-block"}}
 <script src="/js/notifications/sweetalert2/sweetalert2.bundle.js"></script>
 <script src="/js/datagrid/datatables/datatables.bundle.js"></script>
-<script src="/js/manager/manager_monitor.js" ></script>
-
+<script src="/js/manager/manager_monitor.js"></script>
 {{/inline}}
 
-{{/layouts/main}} 
+{{/layouts/main}}

@@ -26,6 +26,7 @@ export const devices = pgTable('devices', {
   name: text('name').notNull(),
   bootTime: timestamp('boot_time').notNull(),
   ratio: doublePrecision('ratio'),
+  issueCount: integer('issue_count').default(0),
 });
 
 // scraps table

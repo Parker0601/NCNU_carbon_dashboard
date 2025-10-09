@@ -145,218 +145,43 @@
               </div>
             </div>
 
-            <!-- 液態燃料 -->
+            <!-- 製程 (動態載入class=2的燃料) -->
             <div class="tab-pane fade" id="tab-liquid" role="tabpanel" aria-labelledby="tab-liquid-tab">
-              <div class="card fuel-card">
-                <div class="fuel-category-grid">
-                  <!-- 蒸餘油 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="liquid_zhengyu_you">蒸餘油 (燃料油)</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="liquid_zhengyu_you" data-category="liquid" min="0" step="0.01">
-                      <span class="unit-label">公秤/年</span>
-                    </div>
-                  </div>
-                  <!-- 液化石油氣 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="liquid_lihua_shiyouqi">液化石油氣</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="liquid_lihua_shiyouqi" data-category="liquid" min="0" step="0.01">
-                      <span class="unit-label">公秤/年</span>
-                    </div>
-                  </div>
-                  <!-- 柴油 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="liquid_chai_you">柴油</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="liquid_chai_you" data-category="liquid" min="0" step="0.01">
-                      <span class="unit-label">公秤/年</span>
-                    </div>
-                  </div>
-                  <!-- 其他油品 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="liquid_qita_youpin">其他油品</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="liquid_qita_youpin" data-category="liquid" min="0" step="0.01">
-                      <span class="unit-label">公秤/年</span>
-                    </div>
-                  </div>
-                  <!-- 車用汽油 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="liquid_cheyong_qiyou">車用汽油</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="liquid_cheyong_qiyou" data-category="liquid" min="0" step="0.01">
-                      <span class="unit-label">公秤/年</span>
-                    </div>
-                  </div>
-                  <!-- 石油焦 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="liquid_shiyoujiao">石油焦</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="liquid_shiyoujiao" data-category="liquid" min="0" step="0.01">
-                      <span class="unit-label">公噸/年</span>
-                    </div>
-                  </div>
-                  <!-- 原油 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="liquid_yuanyou">原油</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="liquid_yuanyou" data-category="liquid" min="0" step="0.01">
-                      <span class="unit-label">公秤/年</span>
-                    </div>
-                  </div>
-                  <!-- 奧里油 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="liquid_aoli_you">奧里油</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="liquid_aoli_you" data-category="liquid" min="0" step="0.01">
-                      <span class="unit-label">公噸/年</span>
-                    </div>
-                  </div>
-                  <!-- 天然氣凝結油 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="liquid_tianranqi_ningjie_you">天然氣凝結油</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="liquid_tianranqi_ningjie_you" data-category="liquid" min="0" step="0.01">
-                      <span class="unit-label">千立方公尺/年</span>
-                    </div>
-                  </div>
-                  <!-- 煤油 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="liquid_meiyou">煤油</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="liquid_meiyou" data-category="liquid" min="0" step="0.01">
-                      <span class="unit-label">公秤/年</span>
-                    </div>
-                  </div>
-                  <!-- 頁岩油 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="liquid_yeshai_you">頁岩油</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="liquid_yeshai_you" data-category="liquid" min="0" step="0.01">
-                      <span class="unit-label">公噸/年</span>
-                    </div>
-                  </div>
-                  <!-- 石油腦 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="liquid_shiyouna">石油腦</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="liquid_shiyouna" data-category="liquid" min="0" step="0.01">
-                      <span class="unit-label">公秤/年</span>
-                    </div>
-                  </div>
-                  <!-- 柏油 -->
-                  <div class="form-group row align-items-center mb-4">
-                    <label class="col-sm-4 col-form-label" for="liquid_bai_you">柏油</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="liquid_bai_you" data-category="liquid" min="0" step="0.01">
-                      <span class="unit-label">公秤/年</span>
-                    </div>
-                  </div>
+              <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="sr-only">載入中...</span>
                 </div>
+                <p class="mt-2 text-muted">正在載入製程燃料資料...</p>
               </div>
             </div>
 
-            <!-- 氣態燃料 -->
+            <!-- 逸散 (動態載入class=3的燃料) -->
             <div class="tab-pane fade" id="tab-gas" role="tabpanel" aria-labelledby="tab-gas-tab">
-              <div class="fuel-category-grid">
-                <div class="card fuel-card">
-                  <!-- 天然氣 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="gas_tianranqi">天然氣</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="gas_tianranqi" data-category="gas" min="0" step="0.01">
-                      <span class="unit-label">千立方公尺/年</span>
-                    </div>
-                  </div>
-                  <!-- 高爐氣 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="gas_gaoluqi">高爐氣</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="gas_gaoluqi" data-category="gas" min="0" step="0.01">
-                      <span class="unit-label">千立方公尺/年</span>
-                    </div>
-                  </div>
-                  <!-- 焦爐氣 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="gas_jiaoluqi">焦爐氣</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="gas_jiaoluqi" data-category="gas" min="0" step="0.01">
-                      <span class="unit-label">千立方公尺/年</span>
-                    </div>
-                  </div>
-                  <!-- 煉油氣 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="gas_lianyouqi">煉油氣</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="gas_lianyouqi" data-category="gas" min="0" step="0.01">
-                      <span class="unit-label">千立方公尺/年</span>
-                    </div>
-                  </div>
-                  <!-- 乙烷 -->
-                  <div class="form-group row align-items-center mb-4">
-                    <label class="col-sm-4 col-form-label" for="gas_yiwan">乙烷</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="gas_yiwan" data-category="gas" min="0" step="0.01">
-                      <span class="unit-label">公秤/年</span>
-                    </div>
-                  </div>
+              <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="sr-only">載入中...</span>
                 </div>
+                <p class="mt-2 text-muted">正在載入逸散燃料資料...</p>
               </div>
             </div>
 
-            <!-- 移動源 -->
+            <!-- 移動 (動態載入class=4的燃料) -->
             <div class="tab-pane fade" id="tab-mobile" role="tabpanel" aria-labelledby="tab-mobile-tab">
-              <div class="fuel-category-grid">
-                <div class="card fuel-card">
-                  <!-- LNG -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="mobile_LNG">液化天然氣 (LNG)</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="mobile_LNG" data-category="mobile" min="0" step="0.01">
-                      <span class="unit-label">千立方公尺/年</span>
-                    </div>
-                  </div>
-                  <!-- LPG -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="mobile_LPG">液化石油氣 (LPG)</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="mobile_LPG" data-category="mobile" min="0" step="0.01">
-                      <span class="unit-label">公秤/年</span>
-                    </div>
-                  </div>
-                  <!-- 柴油 -->
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-4 col-form-label" for="mobile_diesel">柴油</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="mobile_diesel" data-category="mobile" min="0" step="0.01">
-                      <span class="unit-label">公秤/年</span>
-                    </div>
-                  </div>
-                  <!-- 車用汽油 -->
-                  <div class="form-group row align-items-center mb-0">
-                    <label class="col-sm-4 col-form-label" for="mobile_gasoline">車用汽油</label>
-                    <div class="col-sm-8 position-relative">
-                      <input type="number" class="form-control fuel-input" id="mobile_gasoline" data-category="mobile" min="0" step="0.01">
-                      <span class="unit-label">公秤/年</span>
-                    </div>
-                  </div>
+              <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="sr-only">載入中...</span>
                 </div>
+                <p class="mt-2 text-muted">正在載入移動燃料資料...</p>
               </div>
             </div>
 
-            <!-- 電力 -->
+            <!-- 電力使用 (動態載入class=5的燃料) -->
             <div class="tab-pane fade" id="tab-electricity" role="tabpanel" aria-labelledby="tab-electricity-tab">
-              <div class="fuel-category-grid">
-                <div class="card fuel-card">
-                  <div class="form-group row align-items-center mb-2">
-                    <label class="col-sm-2 col-form-label" for="electricity_calculation">電力</label>
-                    <div class="col-sm-10 position-relative">
-                      <input type="number" class="form-control fuel-input" id="electricity_calculation" data-category="electricity" min="0" step="0.1">
-                      <span class="unit-label">kWh</span>
-                    </div>
-                  </div>
+              <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="sr-only">載入中...</span>
                 </div>
+                <p class="mt-2 text-muted">正在載入電力使用燃料資料...</p>
               </div>
             </div>
 

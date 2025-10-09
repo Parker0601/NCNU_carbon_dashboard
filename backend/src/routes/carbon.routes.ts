@@ -184,6 +184,126 @@ router.get('/fuels/class-1', async (_req, res) => {
   }
 });
 
+// 取得class=2的燃料選單（用於製程分頁）
+router.get('/fuels/class-2', async (_req, res) => {
+  try {
+    console.log('🔍 取得class=2的燃料選單...');
+    
+    const fuels = await db.select({
+      id: carbon.id,
+      name: carbon.fuelName,
+      unit: carbon.unit,
+      class: carbon.class,
+    }).from(carbon).where(eq(carbon.class, '2'));
+
+    console.log(`✅ 成功取得 ${fuels.length} 種class=2的燃料`);
+    
+    res.json({
+      success: true,
+      data: fuels,
+      message: `成功取得 ${fuels.length} 種class=2的燃料選單`
+    });
+
+  } catch (error) {
+    console.error('❌ 取得class=2燃料選單時發生錯誤:', error);
+    res.status(500).json({
+      success: false,
+      message: '取得class=2燃料選單失敗',
+      error: error instanceof Error ? error.message : '未知錯誤'
+    });
+  }
+});
+
+// 取得class=3的燃料選單（用於逸散分頁）
+router.get('/fuels/class-3', async (_req, res) => {
+  try {
+    console.log('🔍 取得class=3的燃料選單...');
+    
+    const fuels = await db.select({
+      id: carbon.id,
+      name: carbon.fuelName,
+      unit: carbon.unit,
+      class: carbon.class,
+    }).from(carbon).where(eq(carbon.class, '3'));
+
+    console.log(`✅ 成功取得 ${fuels.length} 種class=3的燃料`);
+    
+    res.json({
+      success: true,
+      data: fuels,
+      message: `成功取得 ${fuels.length} 種class=3的燃料選單`
+    });
+
+  } catch (error) {
+    console.error('❌ 取得class=3燃料選單時發生錯誤:', error);
+    res.status(500).json({
+      success: false,
+      message: '取得class=3燃料選單失敗',
+      error: error instanceof Error ? error.message : '未知錯誤'
+    });
+  }
+});
+
+// 取得class=4的燃料選單（用於移動分頁）
+router.get('/fuels/class-4', async (_req, res) => {
+  try {
+    console.log('🔍 取得class=4的燃料選單...');
+    
+    const fuels = await db.select({
+      id: carbon.id,
+      name: carbon.fuelName,
+      unit: carbon.unit,
+      class: carbon.class,
+    }).from(carbon).where(eq(carbon.class, '4'));
+
+    console.log(`✅ 成功取得 ${fuels.length} 種class=4的燃料`);
+    
+    res.json({
+      success: true,
+      data: fuels,
+      message: `成功取得 ${fuels.length} 種class=4的燃料選單`
+    });
+
+  } catch (error) {
+    console.error('❌ 取得class=4燃料選單時發生錯誤:', error);
+    res.status(500).json({
+      success: false,
+      message: '取得class=4燃料選單失敗',
+      error: error instanceof Error ? error.message : '未知錯誤'
+    });
+  }
+});
+
+// 取得class=5的燃料選單（用於電力使用分頁）
+router.get('/fuels/class-5', async (_req, res) => {
+  try {
+    console.log('🔍 取得class=5的燃料選單...');
+    
+    const fuels = await db.select({
+      id: carbon.id,
+      name: carbon.fuelName,
+      unit: carbon.unit,
+      class: carbon.class,
+    }).from(carbon).where(eq(carbon.class, '5'));
+
+    console.log(`✅ 成功取得 ${fuels.length} 種class=5的燃料`);
+    
+    res.json({
+      success: true,
+      data: fuels,
+      message: `成功取得 ${fuels.length} 種class=5的燃料選單`
+    });
+
+  } catch (error) {
+    console.error('❌ 取得class=5燃料選單時發生錯誤:', error);
+    res.status(500).json({
+      success: false,
+      message: '取得class=5燃料選單失敗',
+      error: error instanceof Error ? error.message : '未知錯誤'
+    });
+  }
+});
+
 // 記錄能源消耗並計算碳排量
 //也就是recordEnergyConsume 手動輸入(目前沒有依賴設備)
 router.post('/recordEnergyConsume', authenticateToken, async (req, res) => {

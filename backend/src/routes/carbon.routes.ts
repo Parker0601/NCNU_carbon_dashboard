@@ -525,6 +525,8 @@ router.get('/my-calculations', authenticateToken, async (req, res) => {
   try {
     const userId = req.user?.id;
     const userRole = req.user?.role;
+    const groupByClass = req.query.groupByClass === 'true';
+    const range = req.query.range as string;
 
     if (!userId) {
       return res.status(401).json({
@@ -550,24 +552,135 @@ router.get('/my-calculations', authenticateToken, async (req, res) => {
 
     console.log(`✅ 找到 ${calculations.length} 筆計算記錄`);
 
-    // 按天分區處理資料
-    const dailyData = processDailyData(calculations);
+    // 如果要求按類別分組
+    if (groupByClass) {
+      console.log('📊 按類別分組處理資料...');
+      
+      // JOIN carbon 表取得 class 欄位
+      const calculationsWithClass = await db.select({
+        id: carbonCalculations.id,
+        userId: carbonCalculations.userId,
+        carbonId: carbonCalculations.carbonId,
+        fuelName: carbonCalculations.fuelName,
+        consumption: carbonCalculations.consumption,
+        unit: carbonCalculations.unit,
+        totalEmission: carbonCalculations.totalEmission,
+        calculationDate: carbonCalculations.calculationDate,
+        createdAt: carbonCalculations.createdAt,
+        notes: carbonCalculations.notes,
+        class: carbon.class
+      })
+      .from(carbonCalculations)
+      .innerJoin(carbon, eq(carbonCalculations.carbonId, carbon.id))
+      .where(userRole === USER_ROLES.BOSS ? undefined : eq(carbonCalculations.userId, userId))
+      .orderBy(desc(carbonCalculations.calculationDate), desc(carbonCalculations.createdAt));
 
-    res.json({
-      success: true,
-      data: {
-        dailyData: dailyData.dailyGroups,
-        totalEmission: dailyData.totalEmission,
-        emissionBreakdown: dailyData.emissionBreakdown,
-        summary: {
-          totalRecords: calculations.length,
-          totalDays: dailyData.dailyGroups.length,
-          averageDailyEmission: dailyData.dailyGroups.length > 0 ? 
-            (dailyData.totalEmission / dailyData.dailyGroups.length).toFixed(2) : 0
+      // 根據 range 參數篩選日期
+      let filteredCalculations = calculationsWithClass;
+      if (range === 'week' || range === 'month') {
+        const now = new Date();
+        const days = range === 'month' ? 30 : 7;
+        const cutoffDate = new Date(now.getTime() - (days * 24 * 60 * 60 * 1000));
+        const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+        
+        filteredCalculations = calculationsWithClass.filter(calc => 
+          calc.calculationDate >= cutoffDateStr
+        );
+      }
+
+      // 按日期和類別分組
+      const dailyGroupsByClass: { [key: string]: { [key: string]: number } } = {};
+      
+      filteredCalculations.forEach(record => {
+        const date = record.calculationDate;
+        const classKey = `class${record.class}`;
+        
+        if (!dailyGroupsByClass[date]) {
+          dailyGroupsByClass[date] = {
+            class1: 0,
+            class2: 0,
+            class3: 0,
+            class4: 0,
+            class5: 0
+          };
         }
-      },
-      message: `成功取得 ${calculations.length} 筆計算記錄，共 ${dailyData.dailyGroups.length} 天`
-    });
+        
+        dailyGroupsByClass[date][classKey] += record.totalEmission;
+      });
+
+      // 轉換為陣列格式並排序
+      const dailyEmissionsByClass = Object.keys(dailyGroupsByClass)
+        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+        .map(date => {
+          const data = dailyGroupsByClass[date];
+          const dateObj = new Date(date);
+          const dateLabel = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+          
+          return {
+            date: date,
+            dateLabel: dateLabel,
+            class1: parseFloat(data.class1.toFixed(2)),
+            class2: parseFloat(data.class2.toFixed(2)),
+            class3: parseFloat(data.class3.toFixed(2)),
+            class4: parseFloat(data.class4.toFixed(2)),
+            class5: parseFloat(data.class5.toFixed(2))
+          };
+        });
+
+      // 計算摘要統計
+      const summary = {
+        class1: { total: 0, avg: 0 },
+        class2: { total: 0, avg: 0 },
+        class3: { total: 0, avg: 0 },
+        class4: { total: 0, avg: 0 },
+        class5: { total: 0, avg: 0 }
+      };
+
+      dailyEmissionsByClass.forEach(day => {
+        summary.class1.total += day.class1;
+        summary.class2.total += day.class2;
+        summary.class3.total += day.class3;
+        summary.class4.total += day.class4;
+        summary.class5.total += day.class5;
+      });
+
+      const days = dailyEmissionsByClass.length;
+      if (days > 0) {
+        summary.class1.avg = parseFloat((summary.class1.total / days).toFixed(2));
+        summary.class2.avg = parseFloat((summary.class2.total / days).toFixed(2));
+        summary.class3.avg = parseFloat((summary.class3.total / days).toFixed(2));
+        summary.class4.avg = parseFloat((summary.class4.total / days).toFixed(2));
+        summary.class5.avg = parseFloat((summary.class5.total / days).toFixed(2));
+      }
+
+      res.json({
+        success: true,
+        data: {
+          dailyEmissionsByClass: dailyEmissionsByClass,
+          summary: summary
+        },
+        message: `成功取得 ${filteredCalculations.length} 筆計算記錄，共 ${days} 天，按類別分組`
+      });
+    } else {
+      // 原有行為：按天分區處理資料
+      const dailyData = processDailyData(calculations);
+
+      res.json({
+        success: true,
+        data: {
+          dailyData: dailyData.dailyGroups,
+          totalEmission: dailyData.totalEmission,
+          emissionBreakdown: dailyData.emissionBreakdown,
+          summary: {
+            totalRecords: calculations.length,
+            totalDays: dailyData.dailyGroups.length,
+            averageDailyEmission: dailyData.dailyGroups.length > 0 ? 
+              (dailyData.totalEmission / dailyData.dailyGroups.length).toFixed(2) : 0
+          }
+        },
+        message: `成功取得 ${calculations.length} 筆計算記錄，共 ${dailyData.dailyGroups.length} 天`
+      });
+    }
 
   } catch (error) {
     console.error('❌ 取得計算記錄時發生錯誤:', error);

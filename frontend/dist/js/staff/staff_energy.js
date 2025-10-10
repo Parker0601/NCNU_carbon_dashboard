@@ -269,11 +269,7 @@
         
         // 如果是動態載入的燃料類別，需要從對應的燃料陣列取得排放係數
         if (['fuel-burning', 'process', 'emission', 'mobile', 'electricity'].includes(category)) {
-<<<<<<< Updated upstream
-          const carbonId = $(`#${id}`).data('carbon-id');
-=======
           const carbonId = String($(`#${id}`).data('carbon-id')); // 確保 carbonId 是字串
->>>>>>> Stashed changes
           let fuel = null;
           
           // 根據類別找到對應的燃料陣列
@@ -322,6 +318,51 @@
       'process': detailed['process'],
       'emission': detailed['emission']
     };
+  }
+
+  // 從後端 API 取得按類別分組的碳排放資料
+  async function fetchCarbonEmissionsByClass(range = 'week') {
+    try {
+      console.log(`🔍 正在取得按類別分組的碳排放資料 (range: ${range})...`);
+      
+      const token = getToken();
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const apiUrl = `${API_BASE}/carbon/my-calculations?groupByClass=true&range=${range}`;
+      console.log('🌐 API URL:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: headers
+      });
+      
+      console.log('📡 Response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('📦 Response data:', result);
+      
+      if (result.success) {
+        console.log(`✅ 成功取得按類別分組的碳排放資料`);
+        return result.data;
+      } else {
+        console.error(`❌ 取得按類別分組資料失敗:`, result.message);
+        return null;
+      }
+    } catch (error) {
+      console.error(`❌ 取得按類別分組資料時發生錯誤:`, error);
+      console.error('❌ 錯誤詳情:', error.message);
+      return null;
+    }
   }
 
   function fetchCarbonEmissionHistory(range = 'week') {
@@ -388,6 +429,31 @@
     return $('#trend-summary-table');
   }
 
+  // 新的按類別分組摘要渲染函數
+  function renderCarbonSummaryByClass(summary, days, highlightClass = null) {
+    const $table = ensureTrendSummaryContainer();
+    const $tbody = $table.find('tbody').empty();
+
+    function row(name, total, avg, isHighlighted = false) {
+      const highlightStyle = isHighlighted ? 'style="background-color: #fff3e0; font-weight: bold; color: #ff6b35;"' : '';
+      return `
+        <tr ${highlightStyle}>
+          <td>${name}</td>
+          <td>${total.toFixed(2)}</td>
+          <td>${avg.toFixed(2)}</td>
+          <td>kg CO₂e</td>
+        </tr>`;
+    }
+
+    // 顯示 5 個類別（對應 class 1-5），按照指定順序
+    $tbody.append(row('燃料燃燒', summary.class1.total, summary.class1.avg, highlightClass === '1'));
+    $tbody.append(row('製程', summary.class2.total, summary.class2.avg, highlightClass === '2'));
+    $tbody.append(row('逸散', summary.class3.total, summary.class3.avg, highlightClass === '3'));
+    $tbody.append(row('移動', summary.class4.total, summary.class4.avg, highlightClass === '4'));
+    $tbody.append(row('電力使用', summary.class5.total, summary.class5.avg, highlightClass === '5'));
+  }
+
+  // 保留原有的摘要渲染函數作為備用
   function renderCarbonSummary(data) {
     const days = data.length;
     const sum = {
@@ -425,29 +491,246 @@
         </tr>`;
     }
 
-    $tbody.append(row('電力', sum.electricity));
-    $tbody.append(row('固態燃料', sum.solid));
-    $tbody.append(row('液態燃料', sum.liquid));
-    $tbody.append(row('氣態燃料', sum.gas));
-    $tbody.append(row('移動源', sum.mobile));
+    // 只顯示五個類別，按照指定順序
     $tbody.append(row('燃料燃燒', sum['fuel-burning']));
     $tbody.append(row('製程', sum['process']));
     $tbody.append(row('逸散', sum['emission']));
+    $tbody.append(row('移動', sum.mobile));
+    $tbody.append(row('電力使用', sum.electricity));
   }
 
-  function renderCarbonEmissionChart(range = 'week') {
-    const history    = fetchCarbonEmissionHistory(range);
+  // 全域變數儲存當前圖表狀態
+  let currentChartRange = 'week';
+  let currentChartData = null;
+
+  // 根據類別名稱取得對應的 class 編號
+  function getClassNumberByCategoryName(categoryName) {
+    const classMapping = {
+      '燃料燃燒': '1',
+      '製程': '2', 
+      '逸散': '3',
+      '移動': '4',
+      '電力使用': '5'
+    };
+    return classMapping[categoryName] || null;
+  }
+
+  // 根據單一類別重新查詢並渲染圖表（保留所有資料，只改變顏色）
+  async function renderChartBySingleClass(range, className, categoryName) {
+    try {
+      console.log(`📊 開始渲染單一類別圖表: ${categoryName} (class: ${className}, range: ${range})...`);
+      
+      // 呼叫 API 取得特定類別的資料
+      const apiData = await fetchCarbonEmissionsByClass(range);
+      
+      if (!apiData || !apiData.dailyEmissionsByClass) {
+        console.warn('⚠️ 無法取得 API 資料，使用預設資料');
+        return;
+      }
+
+      const dailyData = apiData.dailyEmissionsByClass;
+      const categories = dailyData.map(d => d.dateLabel);
+      
+      // 保留所有五個系列，但突出顯示選定的類別
+      const actualSeries = [
+        { name: '燃料燃燒', data: dailyData.map(d => d.class1) },
+        { name: '製程',     data: dailyData.map(d => d.class2) },
+        { name: '逸散',     data: dailyData.map(d => d.class3) },
+        { name: '移動',     data: dailyData.map(d => d.class4) },
+        { name: '電力使用', data: dailyData.map(d => d.class5) }
+      ];
+      const allNames = actualSeries.map(s => s.name);
+
+      // 加上一個「全部」的 dummy series
+      const series = [
+        ...actualSeries,
+        { 
+          name: '全部', 
+          data: Array(categories.length).fill(null)
+        }
+      ];
+
+      // 定義顏色：使用亮暗效果，不使用橘色
+      const normalColors = ['#2dd9c5','#ff5fa2','#3d7eff','#f2c94c','#6f42c1']; // 原來的顏色
+      const mutedColors = ['#b8e6e0','#ffb8d9','#9db8ff','#f9e699','#b899e6']; // 較淡的顏色
+      
+      // 根據選定的類別調整顏色（亮暗效果）
+      const colors = [];
+      for (let i = 0; i < 5; i++) {
+        if (i === (parseInt(className) - 1)) {
+          colors.push(normalColors[i]); // 選定的類別使用正常顏色（亮）
+        } else {
+          colors.push(mutedColors[i]); // 其他類別使用較淡的顏色（暗）
+        }
+      }
+      colors.push('#888888'); // 全部按鈕使用灰色
+
+      const options = {
+        chart: {
+          id: 'carbonChart',
+          type: 'line',
+          stacked: false,
+          toolbar: { show: false },
+          events: {
+            legendClick: function(chartCtx, seriesIndex) {
+              const clickedName = series[seriesIndex].name;
+              if (clickedName === '全部') {
+                // 全部顯示 - 重新渲染完整圖表
+                renderCarbonEmissionChart(range);
+              } else {
+                // 單選切換：顯示單一類別
+                const className = getClassNumberByCategoryName(clickedName);
+                if (className) {
+                  renderChartBySingleClass(range, className, clickedName);
+                }
+              }
+            }
+          }
+        },
+        series: series,
+        stroke: { curve: 'smooth', width: 2 },
+        xaxis: { categories, tickPlacement: 'on' },
+        yaxis: { title: { text: '碳排放 (kg CO₂e)' }, min: 0 },
+        legend: {
+          position: 'bottom',
+          horizontalAlign: 'center',
+          onItemClick: { toggleDataSeries: false }
+        },
+        tooltip: { shared: true, intersect: false, y: { formatter: v => `${v} kg CO₂e` } },
+        colors: colors
+      };
+
+      if (carbonApexChart) {
+        carbonApexChart.updateOptions({ series, colors }, false, true);
+      } else {
+        carbonApexChart = new ApexCharts(
+          document.querySelector('#energyTrendChart'),
+          options
+        );
+        carbonApexChart.render();
+      }
+
+      // 更新摘要表格顯示所有類別，但突出顯示選定的類別
+      renderCarbonSummaryByClass(apiData.summary, dailyData.length, className);
+
+    } catch (error) {
+      console.error('❌ 渲染單一類別圖表時發生錯誤:', error);
+    }
+  }
+
+  async function renderCarbonEmissionChart(range = 'week') {
+    try {
+      console.log(`📊 開始渲染碳排放趨勢圖表 (range: ${range})...`);
+      
+      // 儲存當前狀態
+      currentChartRange = range;
+      
+      // 定義正常顏色（點擊「全部」時使用）
+      const normalColors = ['#2dd9c5','#ff5fa2','#3d7eff','#f2c94c','#6f42c1']; // 原來的顏色
+      
+      // 使用新的 API 取得按類別分組的資料
+      const apiData = await fetchCarbonEmissionsByClass(range);
+      
+      if (!apiData || !apiData.dailyEmissionsByClass) {
+        console.warn('⚠️ 無法取得 API 資料，使用預設資料');
+        // 如果 API 失敗，回退到原有邏輯
+        const history = fetchCarbonEmissionHistory(range);
+        renderCarbonEmissionChartLegacy(history);
+        return;
+      }
+
+      // 儲存資料供後續使用
+      currentChartData = apiData;
+
+      const dailyData = apiData.dailyEmissionsByClass;
+      const categories = dailyData.map(d => d.dateLabel);
+      
+      // 只保留五個系列，按照指定順序
+      const actualSeries = [
+        { name: '燃料燃燒', data: dailyData.map(d => d.class1) }, // class 1 - 從 API 取得
+        { name: '製程',     data: dailyData.map(d => d.class2) }, // class 2 - 從 API 取得
+        { name: '逸散',     data: dailyData.map(d => d.class3) }, // class 3 - 從 API 取得
+        { name: '移動',     data: dailyData.map(d => d.class4) }, // class 4 - 從 API 取得
+        { name: '電力使用', data: dailyData.map(d => d.class5) }  // class 5 - 從 API 取得
+      ];
+      const allNames = actualSeries.map(s => s.name);
+
+      // 加上一個「全部」的 dummy series（不畫線，只為了 legend）
+      const series = [
+        ...actualSeries,
+        { 
+          name: '全部', 
+          data: Array(categories.length).fill(null) // fill null 就不會畫任何點
+        }
+      ];
+
+      const options = {
+        chart: {
+          id: 'carbonChart',
+          type: 'line',
+          stacked: false,
+          toolbar: { show: false },
+          events: {
+            legendClick: function(chartCtx, seriesIndex) {
+              const clickedName = series[seriesIndex].name;
+              if (clickedName === '全部') {
+                // 全部顯示 - 重新渲染完整圖表
+                renderCarbonEmissionChart(currentChartRange);
+              } else {
+                // 單選切換：顯示單一類別
+                const className = getClassNumberByCategoryName(clickedName);
+                if (className) {
+                  renderChartBySingleClass(currentChartRange, className, clickedName);
+                }
+              }
+            }
+          }
+        },
+        series: series,
+        stroke: { curve: 'smooth', width: 2 },
+        xaxis: { categories, tickPlacement: 'on' },
+        yaxis: { title: { text: '碳排放 (kg CO₂e)' }, min: 0 },
+        legend: {
+          position: 'bottom',
+          horizontalAlign: 'center',
+          // 關閉預設點 legend 就隱藏 series 的行為
+          onItemClick: { toggleDataSeries: false }
+        },
+        tooltip: { shared: true, intersect: false, y: { formatter: v => `${v} kg CO₂e` } },
+        colors: [...normalColors, '#888888'] // 使用 normalColors + 全部按鈕灰色
+      };
+
+      if (carbonApexChart) {
+        carbonApexChart.updateOptions({ series, colors: [...normalColors, '#888888'] }, false, true);
+      } else {
+        carbonApexChart = new ApexCharts(
+          document.querySelector('#energyTrendChart'),
+          options
+        );
+        carbonApexChart.render();
+      }
+
+      // 使用新的摘要資料渲染摘要表格（不突出顯示任何類別）
+      renderCarbonSummaryByClass(apiData.summary, dailyData.length, null);
+
+    } catch (error) {
+      console.error('❌ 渲染碳排放趨勢圖表時發生錯誤:', error);
+      // 如果發生錯誤，回退到原有邏輯
+      const history = fetchCarbonEmissionHistory(range);
+      renderCarbonEmissionChartLegacy(history);
+    }
+  }
+
+  // 保留原有的圖表渲染函數作為備用
+  function renderCarbonEmissionChartLegacy(history) {
     const categories = history.map(d => d.dateLabel);
-    // 真正要畫的八個系列
+    // 只保留五個系列，按照指定順序
     const actualSeries = [
-      { name: '電力',     data: history.map(d => +d.carbon.electricity.toFixed(2)) },
-      { name: '固態燃料', data: history.map(d => +d.carbon.solid.toFixed(2)) },
-      { name: '液態燃料', data: history.map(d => +d.carbon.liquid.toFixed(2)) },
-      { name: '氣態燃料', data: history.map(d => +d.carbon.gas.toFixed(2)) },
-      { name: '移動源',   data: history.map(d => +d.carbon.mobile.toFixed(2)) },
       { name: '燃料燃燒', data: history.map(d => +d.carbon['fuel-burning'].toFixed(2)) },
       { name: '製程',     data: history.map(d => +d.carbon['process'].toFixed(2)) },
-      { name: '逸散',     data: history.map(d => +d.carbon['emission'].toFixed(2)) }
+      { name: '逸散',     data: history.map(d => +d.carbon['emission'].toFixed(2)) },
+      { name: '移動',     data: history.map(d => +d.carbon.mobile.toFixed(2)) },
+      { name: '電力使用', data: history.map(d => +d.carbon.electricity.toFixed(2)) }
     ];
     const allNames = actualSeries.map(s => s.name);
 
@@ -493,7 +776,7 @@
         onItemClick: { toggleDataSeries: false }
       },
       tooltip: { shared: true, intersect: false, y: { formatter: v => `${v} kg CO₂e` } },
-      colors: ['#2dd9c5','#ff5fa2','#3d7eff','#f2c94c','#6f42c1','#ff6b35','#28a745','#dc3545','#888888'] // 最後一個顏色給「全部」
+      colors: ['#2dd9c5','#ff5fa2','#3d7eff','#f2c94c','#6f42c1','#888888'] // 5個顏色 + 全部
     };
 
     if (carbonApexChart) {
@@ -561,8 +844,6 @@
     console.log('✅ 所有分頁內容已動態生成');
   }
 
-<<<<<<< Updated upstream
-=======
   // 收集所有燃料輸入並提交到後端API
   async function submitEnergyConsumption() {
     try {
@@ -677,7 +958,6 @@
     }
   }
 
->>>>>>> Stashed changes
   // --------- init & bindings ---------
   $(document).ready(async function () {
     console.log('🚀 頁面初始化開始...');

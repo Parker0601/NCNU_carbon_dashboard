@@ -2,7 +2,11 @@
   // API 配置
   // ====================================================
   const API_BASE = 'http://localhost:3000/api';
-  const API_FUELS_CLASS_1 = `${API_BASE}/carbon/fuels/class-1`;
+  const API_FUELS_CLASS_1 = `${API_BASE}/carbon/fuels/class-1`; // 燃料燃燒
+  const API_FUELS_CLASS_2 = `${API_BASE}/carbon/fuels/class-2`; // 製程
+  const API_FUELS_CLASS_3 = `${API_BASE}/carbon/fuels/class-3`; // 逸散
+  const API_FUELS_CLASS_4 = `${API_BASE}/carbon/fuels/class-4`; // 移動
+  const API_FUELS_CLASS_5 = `${API_BASE}/carbon/fuels/class-5`; // 電力使用
 
   // ====================================================
   // 小工具
@@ -25,7 +29,11 @@
   const submittedFlags = {};
   const remindedFlags = {};
   let carbonApexChart = null;
-  let class1Fuels = []; // 儲存class=1的燃料資料
+  let class1Fuels = []; // 儲存class=1的燃料資料（燃料燃燒）
+  let class2Fuels = []; // 儲存class=2的燃料資料（製程）
+  let class3Fuels = []; // 儲存class=3的燃料資料（逸散）
+  let class4Fuels = []; // 儲存class=4的燃料資料（移動）
+  let class5Fuels = []; // 儲存class=5的燃料資料（電力使用）
 
   // placeholder emission factors（單位需對齊）
   const EMISSION_FACTORS = {
@@ -79,11 +87,11 @@
     return `${yyyy}-${mm}-${dd}`;
   }
 
-  // 從後端取得class=1的燃料資料
-  async function fetchClass1Fuels() {
+  // 通用的燃料資料取得函數
+  async function fetchFuelsByClass(apiUrl, classNumber, fuelArray) {
     try {
-      console.log('🔍 正在取得class=1的燃料資料...');
-      console.log('🌐 API URL:', API_FUELS_CLASS_1);
+      console.log(`🔍 正在取得class=${classNumber}的燃料資料...`);
+      console.log('🌐 API URL:', apiUrl);
       
       const token = getToken();
       const headers = {
@@ -94,7 +102,7 @@
         headers['Authorization'] = `Bearer ${token}`;
       }
       
-      const response = await fetch(API_FUELS_CLASS_1, {
+      const response = await fetch(apiUrl, {
         method: 'GET',
         headers: headers
       });
@@ -110,25 +118,51 @@
       console.log('📦 Response data:', result);
       
       if (result.success) {
-        class1Fuels = result.data;
-        console.log(`✅ 成功取得 ${class1Fuels.length} 種class=1的燃料`);
-        console.log('📋 燃料列表:', class1Fuels);
-        return class1Fuels;
+        fuelArray.length = 0; // 清空陣列
+        fuelArray.push(...result.data); // 加入新資料
+        console.log(`✅ 成功取得 ${fuelArray.length} 種class=${classNumber}的燃料`);
+        console.log('📋 燃料列表:', fuelArray);
+        return fuelArray;
       } else {
-        console.error('❌ 取得燃料資料失敗:', result.message);
+        console.error(`❌ 取得class=${classNumber}燃料資料失敗:`, result.message);
         return [];
       }
     } catch (error) {
-      console.error('❌ 取得燃料資料時發生錯誤:', error);
+      console.error(`❌ 取得class=${classNumber}燃料資料時發生錯誤:`, error);
       console.error('❌ 錯誤詳情:', error.message);
       return [];
     }
   }
 
-  // 動態生成燃料燃燒分頁的HTML
-  function generateFuelBurningContent(fuels) {
+  // 從後端取得class=1的燃料資料（燃料燃燒）
+  async function fetchClass1Fuels() {
+    return await fetchFuelsByClass(API_FUELS_CLASS_1, 1, class1Fuels);
+  }
+
+  // 從後端取得class=2的燃料資料（製程）
+  async function fetchClass2Fuels() {
+    return await fetchFuelsByClass(API_FUELS_CLASS_2, 2, class2Fuels);
+  }
+
+  // 從後端取得class=3的燃料資料（逸散）
+  async function fetchClass3Fuels() {
+    return await fetchFuelsByClass(API_FUELS_CLASS_3, 3, class3Fuels);
+  }
+
+  // 從後端取得class=4的燃料資料（移動）
+  async function fetchClass4Fuels() {
+    return await fetchFuelsByClass(API_FUELS_CLASS_4, 4, class4Fuels);
+  }
+
+  // 從後端取得class=5的燃料資料（電力使用）
+  async function fetchClass5Fuels() {
+    return await fetchFuelsByClass(API_FUELS_CLASS_5, 5, class5Fuels);
+  }
+
+  // 通用的燃料分頁HTML生成函數
+  function generateFuelContent(fuels, category, categoryName) {
     if (!fuels || fuels.length === 0) {
-      return '<div class="alert alert-warning">暫無可用的燃料資料</div>';
+      return `<div class="alert alert-warning">暫無可用的${categoryName}燃料資料</div>`;
     }
 
     let html = '<div class="card fuel-card"><div class="fuel-category-grid">';
@@ -136,15 +170,13 @@
     fuels.forEach(fuel => {
       // 生成唯一的ID（使用carbon表的id）
       const inputId = `fuel_${fuel.id}`;
-      // 清理燃料名稱，移除特殊字符
-      const cleanFuelName = fuel.name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_');
       
       html += `
         <div class="form-group row align-items-center mb-2">
           <label class="col-sm-4 col-form-label" for="${inputId}">${fuel.name}</label>
           <div class="col-sm-8 position-relative">
             <input type="number" class="form-control fuel-input" id="${inputId}" 
-                   data-category="fuel-burning" data-carbon-id="${fuel.id}" 
+                   data-category="${category}" data-carbon-id="${fuel.id}" 
                    data-fuel-name="${fuel.name}" min="0" step="0.01">
             <span class="unit-label">${fuel.unit || '公升/年'}</span>
           </div>
@@ -154,6 +186,31 @@
     
     html += '</div></div>';
     return html;
+  }
+
+  // 動態生成燃料燃燒分頁的HTML
+  function generateFuelBurningContent(fuels) {
+    return generateFuelContent(fuels, 'fuel-burning', '燃料燃燒');
+  }
+
+  // 動態生成製程分頁的HTML
+  function generateProcessContent(fuels) {
+    return generateFuelContent(fuels, 'process', '製程');
+  }
+
+  // 動態生成逸散分頁的HTML
+  function generateEmissionContent(fuels) {
+    return generateFuelContent(fuels, 'emission', '逸散');
+  }
+
+  // 動態生成移動分頁的HTML
+  function generateMobileContent(fuels) {
+    return generateFuelContent(fuels, 'mobile', '移動');
+  }
+
+  // 動態生成電力使用分頁的HTML
+  function generateElectricityContent(fuels) {
+    return generateFuelContent(fuels, 'electricity', '電力使用');
   }
 
   function getRecords() {
@@ -171,7 +228,16 @@
   }
 
   function collectDetailedFuelInputs() {
-    const categories = { solid: {}, liquid: {}, gas: {}, mobile: {}, 'fuel-burning': {} };
+    const categories = { 
+      solid: {}, 
+      liquid: {}, 
+      gas: {}, 
+      mobile: {}, 
+      'fuel-burning': {},
+      'process': {},
+      'emission': {},
+      'electricity': {}
+    };
     if (typeof $ === 'undefined') return categories;
     $('.fuel-input').each(function () {
       const category = $(this).data('category');
@@ -185,17 +251,46 @@
   }
 
   function computeCarbonFromDetailed(detailedFuel) {
-    const result = { solid: 0, liquid: 0, gas: 0, mobile: 0, 'fuel-burning': 0 };
+    const result = { 
+      solid: 0, 
+      liquid: 0, 
+      gas: 0, 
+      mobile: 0, 
+      'fuel-burning': 0,
+      'process': 0,
+      'emission': 0,
+      'electricity': 0
+    };
     if (!detailedFuel) return result;
     Object.entries(detailedFuel).forEach(([category, obj]) => {
       Object.entries(obj || {}).forEach(([id, amount]) => {
         const amt = parseFloat(amount) || 0;
         let factor = 0;
         
-        // 如果是燃料燃燒類別，需要從後端取得排放係數
-        if (category === 'fuel-burning') {
+        // 如果是動態載入的燃料類別，需要從對應的燃料陣列取得排放係數
+        if (['fuel-burning', 'process', 'emission', 'mobile', 'electricity'].includes(category)) {
           const carbonId = $(`#${id}`).data('carbon-id');
-          const fuel = class1Fuels.find(f => f.id === carbonId);
+          let fuel = null;
+          
+          // 根據類別找到對應的燃料陣列
+          switch(category) {
+            case 'fuel-burning':
+              fuel = class1Fuels.find(f => f.id === carbonId);
+              break;
+            case 'process':
+              fuel = class2Fuels.find(f => f.id === carbonId);
+              break;
+            case 'emission':
+              fuel = class3Fuels.find(f => f.id === carbonId);
+              break;
+            case 'mobile':
+              fuel = class4Fuels.find(f => f.id === carbonId);
+              break;
+            case 'electricity':
+              fuel = class5Fuels.find(f => f.id === carbonId);
+              break;
+          }
+          
           if (fuel) {
             // 這裡需要從後端取得實際的排放係數，暫時使用預設值
             factor = 2.5; // 預設排放係數，實際應該從carbon表取得
@@ -219,7 +314,9 @@
       liquid: detailed.liquid,
       gas: detailed.gas,
       mobile: detailed.mobile,
-      'fuel-burning': detailed['fuel-burning']
+      'fuel-burning': detailed['fuel-burning'],
+      'process': detailed['process'],
+      'emission': detailed['emission']
     };
   }
 
@@ -242,7 +339,9 @@
           liquid: 0,
           gas: 0,
           mobile: 0,
-          'fuel-burning': 0
+          'fuel-burning': 0,
+          'process': 0,
+          'emission': 0
         }
       };
     }
@@ -258,6 +357,8 @@
       base[iso].carbon.gas += carb.gas;
       base[iso].carbon.mobile += carb.mobile;
       base[iso].carbon['fuel-burning'] += carb['fuel-burning'];
+      base[iso].carbon['process'] += carb['process'];
+      base[iso].carbon['emission'] += carb['emission'];
     });
 
     return Object.values(base);
@@ -291,7 +392,9 @@
       liquid: 0,
       gas: 0,
       mobile: 0,
-      'fuel-burning': 0
+      'fuel-burning': 0,
+      'process': 0,
+      'emission': 0
     };
     data.forEach(d => {
       sum.electricity += d.carbon.electricity;
@@ -300,6 +403,8 @@
       sum.gas += d.carbon.gas;
       sum.mobile += d.carbon.mobile;
       sum['fuel-burning'] += d.carbon['fuel-burning'];
+      sum['process'] += d.carbon['process'];
+      sum['emission'] += d.carbon['emission'];
     });
 
     const $table = ensureTrendSummaryContainer();
@@ -322,19 +427,23 @@
     $tbody.append(row('氣態燃料', sum.gas));
     $tbody.append(row('移動源', sum.mobile));
     $tbody.append(row('燃料燃燒', sum['fuel-burning']));
+    $tbody.append(row('製程', sum['process']));
+    $tbody.append(row('逸散', sum['emission']));
   }
 
   function renderCarbonEmissionChart(range = 'week') {
     const history    = fetchCarbonEmissionHistory(range);
     const categories = history.map(d => d.dateLabel);
-    // 真正要畫的六個系列
+    // 真正要畫的八個系列
     const actualSeries = [
       { name: '電力',     data: history.map(d => +d.carbon.electricity.toFixed(2)) },
       { name: '固態燃料', data: history.map(d => +d.carbon.solid.toFixed(2)) },
       { name: '液態燃料', data: history.map(d => +d.carbon.liquid.toFixed(2)) },
       { name: '氣態燃料', data: history.map(d => +d.carbon.gas.toFixed(2)) },
       { name: '移動源',   data: history.map(d => +d.carbon.mobile.toFixed(2)) },
-      { name: '燃料燃燒', data: history.map(d => +d.carbon['fuel-burning'].toFixed(2)) }
+      { name: '燃料燃燒', data: history.map(d => +d.carbon['fuel-burning'].toFixed(2)) },
+      { name: '製程',     data: history.map(d => +d.carbon['process'].toFixed(2)) },
+      { name: '逸散',     data: history.map(d => +d.carbon['emission'].toFixed(2)) }
     ];
     const allNames = actualSeries.map(s => s.name);
 
@@ -380,7 +489,7 @@
         onItemClick: { toggleDataSeries: false }
       },
       tooltip: { shared: true, intersect: false, y: { formatter: v => `${v} kg CO₂e` } },
-      colors: ['#2dd9c5','#ff5fa2','#3d7eff','#f2c94c','#6f42c1','#ff6b35','#888888'] // 最後一個顏色給「全部」
+      colors: ['#2dd9c5','#ff5fa2','#3d7eff','#f2c94c','#6f42c1','#ff6b35','#28a745','#dc3545','#888888'] // 最後一個顏色給「全部」
     };
 
     if (carbonApexChart) {
@@ -412,33 +521,56 @@
     }
   }
 
+  // 載入所有分頁的燃料資料
+  async function loadAllFuelTabs() {
+    console.log('🚀 開始載入所有分頁的燃料資料...');
+    
+    // 並行載入所有燃料資料
+    const [
+      class1Fuels,
+      class2Fuels, 
+      class3Fuels,
+      class4Fuels,
+      class5Fuels
+    ] = await Promise.all([
+      fetchClass1Fuels(),
+      fetchClass2Fuels(),
+      fetchClass3Fuels(),
+      fetchClass4Fuels(),
+      fetchClass5Fuels()
+    ]);
+    
+    // 生成各分頁內容
+    const fuelBurningContent = generateFuelBurningContent(class1Fuels);
+    const processContent = generateProcessContent(class2Fuels);
+    const emissionContent = generateEmissionContent(class3Fuels);
+    const mobileContent = generateMobileContent(class4Fuels);
+    const electricityContent = generateElectricityContent(class5Fuels);
+    
+    // 更新各分頁
+    $('#tab-solid').html(fuelBurningContent);
+    $('#tab-liquid').html(processContent);
+    $('#tab-gas').html(emissionContent);
+    $('#tab-mobile').html(mobileContent);
+    $('#tab-electricity').html(electricityContent);
+    
+    console.log('✅ 所有分頁內容已動態生成');
+  }
+
   // --------- init & bindings ---------
   $(document).ready(async function () {
     console.log('🚀 頁面初始化開始...');
-    console.log('🔍 檢查tab-solid元素:', $('#tab-solid').length);
     
-    // 載入class=1的燃料資料並生成燃料燃燒分頁內容
+    // 載入所有分頁的燃料資料
     try {
-      console.log('📞 開始呼叫fetchClass1Fuels...');
-      const fuels = await fetchClass1Fuels();
-      console.log('📊 取得的燃料資料:', fuels);
-      console.log('📊 燃料資料長度:', fuels.length);
-      
-      if (fuels && fuels.length > 0) {
-        console.log('🔨 開始生成燃料燃燒分頁內容...');
-        const fuelBurningContent = generateFuelBurningContent(fuels);
-        console.log('📝 生成的HTML內容:', fuelBurningContent);
-        
-        $('#tab-solid').html(fuelBurningContent);
-        console.log('✅ 燃料燃燒分頁內容已動態生成');
-      } else {
-        console.log('⚠️ 沒有找到class=1的燃料資料，fuels:', fuels);
-        $('#tab-solid').html('<div class="alert alert-warning">暫無可用的燃料資料</div>');
-      }
+      await loadAllFuelTabs();
     } catch (error) {
       console.error('❌ 載入燃料資料時發生錯誤:', error);
       console.error('❌ 錯誤堆疊:', error.stack);
-      $('#tab-solid').html('<div class="alert alert-danger">載入燃料資料失敗: ' + error.message + '</div>');
+      
+      // 顯示錯誤訊息
+      const errorHtml = '<div class="alert alert-danger">載入燃料資料失敗: ' + error.message + '</div>';
+      $('#tab-solid, #tab-liquid, #tab-gas, #tab-mobile, #tab-electricity').html(errorHtml);
     }
 
     // 初始畫本週

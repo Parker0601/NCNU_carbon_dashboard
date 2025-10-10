@@ -27,10 +27,10 @@ const NAV: Record<Role, NavItem[]> = {
   ],
   employee: [
     { href: 'staff_device.html', text: '設備管理', pagename: 'staff_device' },
+    { href: 'waste_management.html', text: '廢棄物管理', pagename: 'waste_management' },
     { href: 'staff_issue.html', text: '問題回報', pagename: 'staff_issue' },
     { href: 'staff_energy.html', text: '能源管理', pagename: 'staff_energy' },
     { href: 'staff_schedule.html', text: '排程管理', pagename: 'staff_schedule' },
-    { href: 'waste_management.html', text: '廢棄物管理', pagename: 'waste_management' },
   ],
 };
 

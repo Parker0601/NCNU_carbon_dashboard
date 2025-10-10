@@ -269,7 +269,7 @@
         
         // 如果是動態載入的燃料類別，需要從對應的燃料陣列取得排放係數
         if (['fuel-burning', 'process', 'emission', 'mobile', 'electricity'].includes(category)) {
-          const carbonId = $(`#${id}`).data('carbon-id');
+          const carbonId = String($(`#${id}`).data('carbon-id')); // 確保 carbonId 是字串
           let fuel = null;
           
           // 根據類別找到對應的燃料陣列
@@ -557,6 +557,120 @@
     console.log('✅ 所有分頁內容已動態生成');
   }
 
+  // 收集所有燃料輸入並提交到後端API
+  async function submitEnergyConsumption() {
+    try {
+      console.log('🚀 開始提交能源消耗資料...');
+      
+      // 檢查認證狀態
+      const token = getToken();
+      console.log('🔑 Token:', token ? '存在' : '不存在');
+      
+      if (!token) {
+        Swal.fire({
+          icon: 'error',
+          title: '認證失敗',
+          text: '請先登入系統'
+        });
+        return;
+      }
+      
+      // 收集所有燃料輸入
+      const fuelInputs = [];
+      $('.fuel-input').each(function() {
+        const value = parseFloat($(this).val());
+        if (!isNaN(value) && value > 0) {
+          const carbonId = $(this).data('carbon-id');
+          const fuelName = $(this).data('fuel-name');
+          const category = $(this).data('category');
+          
+          if (carbonId) {
+            fuelInputs.push({
+              carbonId: String(carbonId), // 確保 carbonId 是字串
+              consumption: value,
+              fuelName: fuelName,
+              category: category
+            });
+          }
+        }
+      });
+
+      if (fuelInputs.length === 0) {
+        Swal.fire('警告', '請至少輸入一種燃料的消耗量', 'warning');
+        return;
+      }
+
+      console.log('📊 收集到的燃料輸入:', fuelInputs);
+
+      // 提交每個燃料消耗記錄
+      const submitPromises = fuelInputs.map(async (input) => {
+        const headers = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        };
+
+        const requestData = {
+          carbonId: input.carbonId,
+          consumption: input.consumption,
+          calculationDate: getLocalISODate()
+        };
+
+        console.log(`📤 提交燃料: ${input.fuelName}, 消耗量: ${input.consumption}`);
+        console.log('📤 請求資料:', requestData);
+        console.log('📤 請求標頭:', headers);
+
+        const response = await fetch(`${API_BASE}/carbon/recordEnergyConsume`, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(requestData)
+        });
+
+        console.log(`📡 回應狀態: ${response.status}`);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('❌ API 錯誤回應:', errorText);
+          throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log(`✅ ${input.fuelName} 提交成功:`, result);
+        
+        return result;
+      });
+
+      // 等待所有提交完成
+      const results = await Promise.all(submitPromises);
+      
+      console.log('🎉 所有燃料消耗記錄提交完成:', results);
+      
+      // 顯示成功訊息
+      const totalRecords = results.length;
+      Swal.fire({
+        icon: 'success',
+        title: '提交成功',
+        text: `已成功記錄 ${totalRecords} 種燃料的消耗資料`,
+        timer: 3000
+      });
+
+      // 更新圖表
+      const activeRange = $('.btn-range-toggle .btn.active').data('range') || 'week';
+      renderCarbonEmissionChart(activeRange);
+
+      // 清空表單
+      $('.fuel-input').val('');
+
+    } catch (error) {
+      console.error('❌ 提交能源消耗資料時發生錯誤:', error);
+      console.error('❌ 錯誤詳情:', error.stack);
+      Swal.fire({
+        icon: 'error',
+        title: '提交失敗',
+        text: '提交能源消耗資料時發生錯誤: ' + error.message
+      });
+    }
+  }
+
   // --------- init & bindings ---------
   $(document).ready(async function () {
     console.log('🚀 頁面初始化開始...');
@@ -584,25 +698,10 @@
       renderCarbonEmissionChart(range);
     });
 
-    // 提交
+    // 提交表單 - 修改為調用新的API
     $('#energy-form').on('submit', function (e) {
       e.preventDefault();
-      const electricity = parseFloat($('#electricity_calculation').val()) || 0;
-      if (isNaN(electricity)) {
-        Swal.fire('錯誤', '請正確輸入電力與交通燃料數值', 'error');
-        return;
-      }
-      const detailedFuel = collectDetailedFuelInputs();
-      const today = getLocalISODate();
-      const record = {
-        date: today,
-        electricity,
-        detailedFuel
-      };
-      saveRecord(record);
-      Swal.fire('已提交', '能源消耗資料已儲存並更新碳排放圖表', 'success');
-      const activeRange = $('.btn-range-toggle .btn.active').data('range') || 'week';
-      renderCarbonEmissionChart(activeRange);
+      submitEnergyConsumption();
     });
 
     // reminder 每分鐘檢查

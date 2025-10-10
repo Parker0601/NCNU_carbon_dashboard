@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db/index';
-import { carbon, carbonCalculations } from '../db/schema';
+import { carbon, carbonCalculations, users } from '../db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { authenticateToken, USER_ROLES, requireRole } from '../middleware/auth';
@@ -309,10 +309,26 @@ router.get('/fuels/class-5', async (_req, res) => {
 router.post('/recordEnergyConsume', authenticateToken, async (req, res) => {
   try {
     console.log('🧮 開始記錄能源消耗並計算碳排量...');
+    console.log('📥 請求資料:', req.body);
+    console.log('👤 使用者資訊:', req.user);
+    
+    // 測試資料庫連線
+    try {
+      await db.select().from(carbon).limit(1);
+      console.log('✅ 資料庫連線正常');
+    } catch (dbTestError) {
+      console.error('❌ 資料庫連線失敗:', dbTestError);
+      return res.status(500).json({
+        success: false,
+        message: '資料庫連線失敗',
+        error: dbTestError instanceof Error ? dbTestError.message : '未知錯誤'
+      });
+    }
     
     // 驗證輸入資料
     const validationResult = calculateEmissionSchema.safeParse(req.body);
     if (!validationResult.success) {
+      console.error('❌ 資料驗證失敗:', validationResult.error.errors);
       return res.status(400).json({
         success: false,
         message: '輸入資料驗證失敗',
@@ -323,27 +339,63 @@ router.post('/recordEnergyConsume', authenticateToken, async (req, res) => {
     const { carbonId, consumption, calculationDate } = validationResult.data;
     const userId = (req as any).user?.id; // 假設從認證中間件取得使用者ID
 
+    console.log(`📊 計算參數: carbonId=${carbonId}, consumption=${consumption}, userId=${userId}`);
+
     if (!userId) {
+      console.error('❌ 使用者ID不存在');
       return res.status(401).json({
         success: false,
         message: '使用者未認證'
       });
     }
 
-    console.log(`📊 計算參數: carbonId=${carbonId}, consumption=${consumption}, userId=${userId}`);
+    // 檢查使用者是否存在
+    try {
+      const userData = await db.select().from(users).where(eq(users.id, userId));
+      console.log(`👤 使用者查詢結果: ${userData.length} 筆資料`);
+      if (userData.length === 0) {
+        console.error(`❌ 找不到userId=${userId}的使用者`);
+        return res.status(404).json({
+          success: false,
+          message: '使用者不存在',
+          debug: { userId }
+        });
+      }
+      console.log(`✅ 使用者存在: ${userData[0].name}`);
+    } catch (userError) {
+      console.error('❌ 查詢使用者失敗:', userError);
+      return res.status(500).json({
+        success: false,
+        message: '查詢使用者失敗',
+        error: userError instanceof Error ? userError.message : '未知錯誤'
+      });
+    }
 
     // 從carbon表取得係數資料
+    console.log(`🔍 查詢carbonId=${carbonId}的燃料資料...`);
+    
+    // 先檢查carbon表是否有資料
+    const allCarbonData = await db.select().from(carbon).limit(5);
+    console.log(`📋 carbon表總共有 ${allCarbonData.length} 筆資料 (顯示前5筆):`, allCarbonData.map(c => ({ id: c.id, name: c.fuelName })));
+    
     const carbonData = await db.select().from(carbon).where(eq(carbon.id, carbonId));
+    console.log(`📋 查詢carbonId=${carbonId}結果: ${carbonData.length} 筆資料`);
     
     if (carbonData.length === 0) {
+      console.error(`❌ 找不到carbonId=${carbonId}的燃料資料`);
       return res.status(404).json({
         success: false,
-        message: '找不到指定的碳排係數資料'
+        message: '找不到指定的碳排係數資料',
+        debug: {
+          requestedCarbonId: carbonId,
+          availableCarbonIds: allCarbonData.map(c => c.id)
+        }
       });
     }
 
     const fuel = carbonData[0];
     console.log(`🔍 找到燃料: ${fuel.fuelName}`);
+    console.log(`📊 燃料詳細資料:`, fuel);
 
     // 計算各種排放量 (消耗量 × 係數)
     const co2Emission = fuel.co2 ? consumption * fuel.co2 : 0;
@@ -388,7 +440,7 @@ router.post('/recordEnergyConsume', authenticateToken, async (req, res) => {
     console.log(`🎯 總排放量: ${totalEmission}`);
 
     // 存入carbon_calculations表的total_emission欄位
-    const calculationResult = await db.insert(carbonCalculations).values({
+    const insertData = {
       userId: userId,
       carbonId: carbonId,
       fuelName: fuel.fuelName || '',
@@ -398,9 +450,31 @@ router.post('/recordEnergyConsume', authenticateToken, async (req, res) => {
       calculationDate: calculationDate || getTaiwanDate(), // 使用指定的日期或台灣今天的日期
       createdAt: getTaiwanTimestampForDB(), // 使用台灣時間設定創建時間
       notes: `能源消耗記錄: ${fuel.fuelName} 消耗量 ${consumption} ${fuel.unit}，totalEmission總共是 ${totalEmission.toFixed(2)} 公噸/年`
-    }).returning();
-
-    console.log(`✅ 能源消耗記錄已存入資料庫，total_emission: ${totalEmission}，ID: ${calculationResult[0].id}`);
+    };
+    
+    console.log('💾 準備插入資料:', insertData);
+    
+    let calculationResult;
+    try {
+      console.log('💾 開始插入資料到 carbon_calculations 表...');
+      calculationResult = await db.insert(carbonCalculations).values(insertData).returning();
+      console.log(`✅ 能源消耗記錄已存入資料庫，total_emission: ${totalEmission}，ID: ${calculationResult[0].id}`);
+    } catch (dbError) {
+      console.error('❌ 資料庫插入失敗:', dbError);
+      console.error('❌ 插入資料:', insertData);
+      console.error('❌ 錯誤詳情:', dbError instanceof Error ? dbError.message : '未知錯誤');
+      
+      // 回傳錯誤但不要讓整個請求失敗
+      return res.status(500).json({
+        success: false,
+        message: '資料庫插入失敗',
+        error: dbError instanceof Error ? dbError.message : '未知錯誤',
+        debug: {
+          insertData: insertData,
+          error: dbError instanceof Error ? dbError.message : '未知錯誤'
+        }
+      });
+    }
 
     // 回傳計算結果
     res.json({

@@ -1,248 +1,437 @@
-$(document).ready(function () {
-    let calendar = null;
-    let currentSchedule = [];
+/**
+ * /js/staff/staff_schedule.js  (FullCalendar v5 + 接 accept-task API)
+ * 串接後端：
+ *   - GET   /api/schedule/my-tasks
+ *   - PATCH /api/schedule/accept-task/:scheduleId
+ *
+ * - Calendar 與列表共用同一份資料 currentSchedule
+ * - 狀態映射：assigned/accepted/submitted/approved/rejected
+ *            → 未完成/進行中/申請中/完成/退回
+ * 需求：頁面已載入
+ *   - /js/vendors.bundle.js（含 jQuery）
+ *   - /js/notifications/sweetalert2/sweetalert2.bundle.js
+ *   - /js/miscellaneous/fullcalendar/main.min.js（v5）
+ */
 
-    // ---- 假資料；實際用後端 API 換掉這個 ----
-    function fetchSchedule() {
-      // TODO: 用 fetch/$.ajax 從後端撈該員工的任務清單
-      return Promise.resolve([
-        { id:1, title:'廢料處理', start:'2024-06-10T09:00:00', end:'2024-06-10T10:00:00', owner:'EMP001', status:'未完成', desc:'處理廢料', returned: false },
-        { id:2, title:'設備操作', start:'2024-06-10T13:00:00', end:'2024-06-10T14:00:00', owner:'EMP001', status:'完成', desc:'操作機台A', returned: false },
-        { id:3, title:'安全檢查', start:'2024-06-11T10:00:00', end:'2024-06-11T11:00:00', owner:'EMP001', status:'申請中', desc:'檢查安全設施', returned: false },
-        { id:4, title:'文件整理', start:'2024-06-12T09:00:00', end:'2024-06-12T11:00:00', owner:'EMP001', status:'未完成', desc:'整理報表', returned: true, rejectReason: '缺少上次審核要求的附檔內容' }
-      ]).then(data => {
-        currentSchedule = data;
-        return data;
-      });
+// ==============================
+// 小工具 & 常數
+// ==============================
+const API_BASE = 'http://localhost:3000/api';
+const API_MY_TASKS = `${API_BASE}/schedule/my-tasks`;
+
+const TOKEN_KEYS = ['authToken', 'access_token', 'token'];
+
+function getToken() {
+  try {
+    for (const k of TOKEN_KEYS) {
+      const v = localStorage.getItem(k);
+      if (v) return v;
     }
+  } catch (_) {}
+  return '';
+}
 
-    // ---- 工具函式 ----
-    function escapeHtml(str) {
-      return String(str)
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
-    }
+async function fetchJSON(url, options = {}) {
+  const headers = Object.assign(
+    { 'Content-Type': 'application/json' },
+    options.headers || {},
+    getToken() ? { 'Authorization': `Bearer ${getToken()}` } : {}
+  );
+  const resp = await fetch(url, { ...options, headers });
+  let data = null;
+  try { data = await resp.json(); } catch {}
+  if (!resp.ok) {
+    const err = new Error((data && (data.message || data.error)) || `HTTP ${resp.status}`);
+    err.status = resp.status;
+    err.body = data;
+    throw err;
+  }
+  return data ?? {};
+}
 
-    function statusToCalendarClass(status, returned) {
-      if (status === '未完成') {
-        if (returned) return 'bg-warning border-danger text-dark';
-        return 'bg-warning border-warning text-dark';
-      }
-      if (status === '申請中') return 'bg-info border-info';
-      if (status === '完成') return 'bg-success border-success text-white';
-      return '';
-    }
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+    .replaceAll('"','&quot;').replaceAll("'","&#39;");
+}
 
-    function badgeClass(status, returned) {
-      if (status === '未完成') {
-        return 'badge-danger';
-      }
-      if (status === '申請中') return 'badge-info';
-      if (status === '完成') return 'badge-success';
-      return 'badge-secondary';
-    }
+// e.id 可能長得像 "S-12" 或 "I-7"，只對 S-* 才需要打 accept API
+function extractScheduleId(eventId) {
+  if (!eventId || typeof eventId !== 'string') return null;
+  const m = eventId.match(/^S-(\d+)$/);
+  return m ? parseInt(m[1], 10) : null;
+}
 
-    function mapToCalendarEvents(schedule) {
-      return schedule.map(e => ({
-        id: String(e.id),
-        title: e.title,
-        start: e.start,
-        end: e.end,
-        className: statusToCalendarClass(e.status, e.returned),
-        extendedProps: { raw: e }
-      }));
-    }
+// ==============================
+// 狀態映射與樣式
+// ==============================
+function statusText(status) {
+  switch (String(status || '').toLowerCase()) {
+    case 'assigned':  return '未完成';
+    case 'accepted':  return '進行中';
+    case 'submitted': return '申請中';
+    case 'approved':  return '完成';
+    case 'rejected':  return '退回';
+    default:          return '未知';
+  }
+}
 
-    // ---- Calendar 初始化與同步（FullCalendar v5 語法）----
-    function initCalendar() {
-      if (calendar) return;
-      const calendarEl = document.getElementById('calendar');
-      calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'timeGridWeek',   // 你也可改成 'dayGridMonth'
-        timeZone: 'local',
-        locale: 'zh-tw',
-        buttonText: { today: '今天', month: '月', week: '週', day: '日', list: '列表' },
+function badgeClassByStatus(text) {
+  if (text === '退回') return 'badge-danger';
+  if (text === '未完成') return 'badge-warning';
+  if (text === '申請中') return 'badge-info';
+  if (text === '完成') return 'badge-success';
+  if (text === '進行中') return 'badge-primary';
+  return 'badge-secondary';
+}
 
-        // v5 使用 headerToolbar / footerToolbar
-        headerToolbar: {
-          left: 'title',
-          center: '',
-          right: 'today prev,next'
-        },
-        footerToolbar: {
-          left: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek',
-          center: '',
-          right: ''
-        },
+function eventClassByStatus(stxt) {
+  if (stxt === '退回') return 'bg-warning text-dark border-danger';
+  if (stxt === '未完成') return 'bg-warning text-dark border-warning';
+  if (stxt === '申請中') return 'bg-info';
+  if (stxt === '完成') return 'bg-success text-white border-success';
+  if (stxt === '進行中') return 'bg-primary text-white border-primary';
+  return '';
+}
 
-        // v5 不需要 plugins 陣列；main.min.js 已含常用視圖
-        editable: false,
-        // eventLimit 在 v5 移除（自動處理），可忽略
+// ==============================
+// API → 統一資料模型
+// ==============================
+/**
+ * 後端回傳：
+ * {
+ *   schedules: [{ scheduleId, title, description, date, startTime, endTime, status, deviceId, deviceName, ... }],
+ *   issues:    [{ issueId, deviceId, description, status, createTime, deviceName, ... }]
+ * }
+ * 轉為：
+ * {
+ *   type: 'schedule' | 'issue',
+ *   id: 'S-xxx' | 'I-xxx',
+ *   title, desc, deviceName,
+ *   start, end (ISO字串或 null),
+ *   owner: '自己',
+ *   statusText, rawStatus, returned(bool), rejectReason?
+ * }
+ */
+function normalizeTasks(apiData) {
+  const out = [];
+  const payload = apiData?.data || apiData || {};
+  const schedules = Array.isArray(payload.schedules) ? payload.schedules : [];
+  const issues    = Array.isArray(payload.issues)    ? payload.issues    : [];
 
-        events: (fetchInfo, successCallback) => {
-          successCallback(mapToCalendarEvents(currentSchedule));
-        },
-        eventClick: (info) => {
-          const raw = info.event.extendedProps.raw;
-          if (raw) showTaskDetail(raw);
-        }
-      });
-      calendar.render();
-    }
+  for (const s of schedules) {
+    const start = s.date ? `${s.date}T${s.startTime || '00:00:00'}` : (s.startTime || null);
+    const end   = s.date ? `${s.date}T${s.endTime   || '00:00:00'}` : (s.endTime   || null);
+    const stxt  = statusText(s.status);
 
-    function refreshCalendarEvents() {
-      if (!calendar) return;
-      calendar.removeAllEvents();
-      calendar.addEventSource(mapToCalendarEvents(currentSchedule));
-    }
-
-    // ---- 狀態更新（員工端申請 / 重新開始） ----
-    function updateTaskStatus(id, newStatus) {
-      const task = currentSchedule.find(t => String(t.id) === String(id));
-      if (!task) return;
-      task.status = newStatus;
-      if (newStatus === '申請中' || newStatus === '完成') {
-        task.returned = false;
-        delete task.rejectReason;
-      }
-      renderList(currentSchedule);
-      refreshCalendarEvents();
-    }
-
-    function clearReturned(id) {
-      const task = currentSchedule.find(t => String(t.id) === String(id));
-      if (!task) return;
-      task.returned = false; // 保持 status 未完成
-      renderList(currentSchedule);
-      refreshCalendarEvents();
-    }
-
-    // ---- 詳情視窗 ----
-    function showTaskDetail(e) {
-      let extraNote = '';
-      if (e.status === '未完成' && e.returned) {
-        extraNote = '<p style="color:#d9534f;"><strong>備註：</strong>此任務已被退回，請重新處理後再申請。</p>';
-      }
-      let rejectReasonHtml = '';
-      if (e.returned && e.rejectReason) {
-        rejectReasonHtml = `
-          <p><strong>退回原因：</strong></p>
-          <div style="background:#f8d7da; padding:8px; border-radius:4px; color:#842029; margin-bottom:8px;">
-            ${escapeHtml(e.rejectReason)}
-          </div>
-        `;
-      }
-      Swal.fire({
-        title: e.title,
-        html: `
-          ${extraNote}
-          ${rejectReasonHtml}
-          <p><strong>描述：</strong>${e.desc}</p>
-          <p><strong>負責人：</strong>${e.owner}</p>
-          <p><strong>時間：</strong>${e.start.replace('T',' ')} ~ ${e.end.replace('T',' ')}</p>
-          <p><strong>狀態：</strong>${e.status}${e.status==='未完成' && e.returned ? '（已退回）' : ''}</p>
-        `,
-        showCloseButton: true,
-        showConfirmButton: false
-      });
-    }
-
-    // ---- 列表渲染 ----
-    function renderList(events) {
-      const $tb = $('#schedule-table tbody').empty();
-      events.forEach(e => {
-        let rowClass = '';
-        if (e.status === '未完成' && e.returned) rowClass = 'table-danger';
-        else if (e.status === '未完成') rowClass = 'table-warning';
-        else if (e.status === '申請中') rowClass = 'table-info';
-
-        let actionButtons = '';
-        if (e.status === '未完成' && !e.returned) {
-          actionButtons = `<button class="btn btn-warning btn-sm btn-apply-task" data-id="${e.id}">申請</button>`;
-        } else if (e.status === '未完成' && e.returned) {
-          actionButtons = `<button class="btn btn-secondary btn-sm btn-restart-task" data-id="${e.id}">重新開始</button>`;
-        }
-
-        $tb.append(`
-          <tr class="${rowClass}">
-            <td>${e.title}</td>
-            <td>${e.start.replace('T',' ').slice(0,16)} ~ ${e.end.replace('T',' ').slice(0,16)}</td>
-            <td>${e.owner}</td>
-            <td><span class="badge ${badgeClass(e.status, e.returned)}">${e.status}${e.status==='未完成' && e.returned ? '（已退回）' : ''}</span></td>
-            <td>
-              <button class="btn btn-info btn-sm btn-task-detail" data-id="${e.id}">詳情</button>
-              ${actionButtons}
-            </td>
-          </tr>
-        `);
-      });
-    }
-
-    // ---- 視圖切換 ----
-    $('#btn-calendar-view').on('click', function() {
-      $(this).addClass('active');
-      $('#btn-list-view').removeClass('active');
-      $('#calendar-view').show();
-      $('#list-view').hide();
-      if (!calendar) initCalendar();
+    out.push({
+      type: 'schedule',
+      id: `S-${s.scheduleId}`,
+      title: s.title || (s.deviceName ? `設備：${s.deviceName}` : '工作任務'),
+      desc: s.description || '',
+      deviceName: s.deviceName || '',
+      start, end,
+      owner: '自己',
+      statusText: stxt,
+      rawStatus: s.status,
+      returned: stxt === '退回',
+      rejectReason: s.rejectReason || undefined
     });
-    $('#btn-list-view').on('click', function() {
-      $(this).addClass('active');
-      $('#btn-calendar-view').removeClass('active');
-      $('#calendar-view').hide();
-      $('#list-view').show();
-      fetchSchedule().then(events => {
-        renderList(events);
-      });
-    });
+  }
 
-    // ---- 事件代理：申請 / 重新開始 / 詳情 ----
-    $(document).on('click', '.btn-apply-task', function() {
-      const id = $(this).data('id');
-      Swal.fire({
-        title: '送出申請？',
-        text: '是否要將此任務送出給主管審查？',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: '送出'
-      }).then(r => {
-        if (r.isConfirmed) {
-          // TODO: 呼叫後端 API 送出申請（status -> 申請中）
-          updateTaskStatus(id, '申請中');
-          Swal.fire('已送出申請','','success');
-        }
-      });
+  for (const i of issues) {
+    const stxt = statusText(i.status || 'assigned');
+    out.push({
+      type: 'issue',
+      id: `I-${i.issueId}`,
+      title: `[問題] ${i.deviceName || ('設備#' + (i.deviceId ?? ''))}`,
+      desc: i.description || '',
+      deviceName: i.deviceName || '',
+      start: i.createTime || null,
+      end: null,
+      owner: '自己',
+      statusText: stxt,
+      rawStatus: i.status || 'assigned',
+      returned: String(i.status).toLowerCase() === 'rejected',
+      rejectReason: i.rejectReason || undefined
     });
+  }
 
-    $(document).on('click', '.btn-restart-task', function() {
-      const id = $(this).data('id');
-      Swal.fire({
-        title: '重新開始？',
-        text: '是否要針對此任務重新開始處理？',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: '重新開始'
-      }).then(r => {
-        if (r.isConfirmed) {
-          // TODO: 可呼叫後端 API 清除退回標記
-          clearReturned(id);
-          Swal.fire('已重新開始','','info');
-        }
-      });
-    });
-
-    $(document).on('click', '.btn-task-detail', function() {
-      const id = $(this).data('id');
-      const e = currentSchedule.find(x => String(x.id) === String(id));
-      if (e) showTaskDetail(e);
-    });
-
-    // ---- 初始載入 ----
-    fetchSchedule().then(() => {
-      renderList(currentSchedule);
-      initCalendar(); // 先初始化日曆；切到列表時再渲染表格
-    });
+  out.sort((a,b) => {
+    if (!a.start && !b.start) return 0;
+    if (!a.start) return 1;
+    if (!b.start) return -1;
+    return a.start.localeCompare(b.start);
   });
+
+  return out;
+}
+
+// ==============================
+// FullCalendar v5 事件轉換
+// ==============================
+function toCalendarEvents(arr) {
+  return arr.map(e => ({
+    id: e.id,
+    title: e.title,
+    start: e.start || null,
+    end: e.end || null,
+    classNames: [eventClassByStatus(e.statusText)],
+    extendedProps: { raw: e }
+  }));
+}
+
+// ==============================
+// DOM 元素 & 狀態
+// ==============================
+let currentSchedule = [];
+let calendar = null;
+
+const $calendarViewBtn = $('#btn-calendar-view');
+const $listViewBtn = $('#btn-list-view');
+const $calendarWrap = $('#calendar-view');
+const $listWrap = $('#list-view');
+const $tableBody = $('#schedule-table tbody');
+
+// ==============================
+// UI：列表
+// ==============================
+function renderList(arr) {
+  $tableBody.empty();
+  arr.forEach(e => {
+    const rowClass =
+      (e.statusText === '退回') ? 'table-danger' :
+      (e.statusText === '未完成') ? 'table-warning' :
+      (e.statusText === '申請中') ? 'table-info' :
+      (e.statusText === '進行中') ? 'table-primary' : '';
+
+    const timeStr = (e.start ? e.start.replace('T',' ').slice(0,16) : '—') +
+                    (e.end ? (' ~ ' + e.end.replace('T',' ').slice(0,16)) : '');
+
+    // 按鈕規則：
+    // - 未完成(assigned)   -> 顯示「接受任務」
+    // - 進行中(accepted)   -> 顯示「申請」
+    // - 退回(rejected)     -> 顯示「重新開始」
+    let actionBtns = `<button class="btn btn-info btn-sm btn-task-detail" data-id="${e.id}">詳情</button>`;
+    if (e.type === 'schedule') {
+      if (e.statusText === '未完成') {
+        actionBtns += ` <button class="btn btn-primary btn-sm btn-accept-task" data-id="${e.id}">接受任務</button>`;
+      } else if (e.statusText === '進行中') {
+        actionBtns += ` <button class="btn btn-warning btn-sm btn-apply-task" data-id="${e.id}">申請</button>`;
+      } else if (e.statusText === '退回') {
+        actionBtns += ` <button class="btn btn-secondary btn-sm btn-restart-task" data-id="${e.id}">重新開始</button>`;
+      }
+    }
+
+    $tableBody.append(`
+      <tr class="${rowClass}">
+        <td>${escapeHtml(e.title)}</td>
+        <td>${timeStr}</td>
+        <td>${escapeHtml(e.owner)}</td>
+        <td><span class="badge ${badgeClassByStatus(e.statusText)}">${e.statusText}</span></td>
+        <td>${actionBtns}</td>
+      </tr>
+    `);
+  });
+}
+
+// ==============================
+// UI：詳情（SweetAlert2）
+// ==============================
+function showTaskDetail(e) {
+  let extra = '';
+  if (e.statusText === '退回' && e.rejectReason) {
+    extra = `
+      <p><strong>退回原因：</strong></p>
+      <div style="background:#f8d7da;padding:8px;border-radius:4px;color:#842029;margin-bottom:8px;">
+        ${escapeHtml(e.rejectReason)}
+      </div>
+    `;
+  }
+  Swal.fire({
+    title: escapeHtml(e.title),
+    html: `
+      ${extra}
+      <p><strong>類型：</strong>${e.type === 'issue' ? '問題' : '工作任務'}</p>
+      <p><strong>設備：</strong>${escapeHtml(e.deviceName || '—')}</p>
+      <p><strong>描述：</strong>${escapeHtml(e.desc || '—')}</p>
+      <p><strong>時間：</strong>${e.start ? e.start.replace('T',' ') : '—'}${e.end ? (' ~ ' + e.end.replace('T',' ')) : ''}</p>
+      <p><strong>狀態：</strong>${e.statusText}</p>
+    `,
+    showCloseButton: true,
+    showConfirmButton: false
+  });
+}
+
+// ==============================
+// 本地更新（示範）；若有後端 API 再改成 fetch 後重載
+// ==============================
+function updateLocalStatus(id, toText) {
+  const t = currentSchedule.find(x => x.id === String(id));
+  if (!t) return;
+  t.statusText = toText;
+  t.returned = (toText === '退回');
+
+  renderList(currentSchedule);
+  if (calendar) {
+    calendar.removeAllEvents();
+    calendar.addEventSource(toCalendarEvents(currentSchedule));
+  }
+}
+
+// ==============================
+// FullCalendar v5 初始化
+// ==============================
+function ensureCalendar() {
+  if (calendar) return;
+
+  if (!(window.FullCalendar && typeof window.FullCalendar.Calendar === 'function')) {
+    console.error('FullCalendar v5 未正確載入：/js/miscellaneous/fullcalendar/main.min.js');
+    Swal.fire({
+      icon: 'error',
+      title: '日曆元件載入失敗',
+      text: '請檢查是否正確載入 FullCalendar v5 的 main.min.js'
+    });
+    return;
+  }
+
+  const el = document.getElementById('calendar');
+  calendar = new FullCalendar.Calendar(el, {
+    locale: 'zh-tw',
+    initialView: 'timeGridWeek',
+    headerToolbar: { left: 'title', center: '', right: 'today prev,next' },
+    allDaySlot: false,
+    events: toCalendarEvents(currentSchedule),
+    eventClick: function(info) {
+      const raw = info.event.extendedProps?.raw || {};
+      showTaskDetail(raw);
+    }
+  });
+  calendar.render();
+}
+
+// ==============================
+/** 載入我的任務 */
+// ==============================
+async function loadMyTasks() {
+  const resp = await fetchJSON(API_MY_TASKS);
+  currentSchedule = normalizeTasks(resp);
+}
+
+// ==============================
+/** 入口 */
+// ==============================
+$(document).ready(async function () {
+  try {
+    await loadMyTasks();
+  } catch (e) {
+    Swal.fire({ icon: 'error', title: '載入失敗', text: e.message || String(e) });
+  }
+
+  // 初始化日曆
+  ensureCalendar();
+  if (calendar) {
+    calendar.removeAllEvents();
+    calendar.addEventSource(toCalendarEvents(currentSchedule));
+  }
+
+  // 初始化列表
+  renderList(currentSchedule);
+
+  // 視圖切換
+  $calendarViewBtn.on('click', function () {
+    $(this).addClass('active');
+    $listViewBtn.removeClass('active');
+    $calendarWrap.show();
+    $listWrap.hide();
+    if (calendar) calendar.updateSize(); // 顯示後更新尺寸
+  });
+
+  $listViewBtn.on('click', function () {
+    $(this).addClass('active');
+    $calendarViewBtn.removeClass('active');
+    $calendarWrap.hide();
+    $listWrap.show();
+    renderList(currentSchedule);
+  });
+
+  // 列表操作：詳情
+  $(document).on('click', '.btn-task-detail', function () {
+    const id = $(this).data('id');
+    const e = currentSchedule.find(x => x.id === String(id));
+    if (e) showTaskDetail(e);
+  });
+
+  // 列表操作：接受任務（PATCH /api/schedule/accept-task/:scheduleId）
+  $(document).on('click', '.btn-accept-task', async function () {
+    const eventId = $(this).data('id'); // e.g. "S-12"
+    const sid = extractScheduleId(String(eventId));
+    if (!sid) {
+      return Swal.fire({ icon: 'error', title: '無法辨識任務', text: `事件編號 ${eventId} 格式不正確` });
+    }
+
+    const ok = await Swal.fire({
+      title: '接受任務？',
+      text: '將把此任務狀態從「未完成」改為「進行中」。',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: '接受',
+    }).then(r => r.isConfirmed);
+    if (!ok) return;
+
+    try {
+      // 呼叫 accept API
+      await fetchJSON(`${API_BASE}/schedule/accept-task/${sid}`, { method: 'PATCH' });
+
+      // 成功後重載並刷新
+      await loadMyTasks();
+      if (calendar) {
+        calendar.removeAllEvents();
+        calendar.addEventSource(toCalendarEvents(currentSchedule));
+      }
+      renderList(currentSchedule);
+
+      Swal.fire('已接受任務', '', 'success');
+    } catch (err) {
+      Swal.fire({
+        icon: 'error',
+        title: '接受失敗',
+        text: (err && err.message) ? err.message : '請稍後再試'
+      });
+    }
+  });
+
+  // 列表操作：申請（TODO：接你的實際 API）
+  $(document).on('click', '.btn-apply-task', async function () {
+    const id = $(this).data('id');
+    const ok = await Swal.fire({
+      title: '送出申請？',
+      text: '是否要將此任務送出給主管審查？',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: '送出'
+    }).then(r => r.isConfirmed);
+    if (!ok) return;
+
+    // TODO：改為呼叫後端 API（例：PATCH /api/schedule/submit/:scheduleId），成功後重新 loadMyTasks()
+    updateLocalStatus(id, '申請中');
+    Swal.fire('已送出申請', '', 'success');
+  });
+
+  // 列表操作：重新開始（TODO：接你的實際 API）
+  $(document).on('click', '.btn-restart-task', async function () {
+    const id = $(this).data('id');
+    const ok = await Swal.fire({
+      title: '重新開始？',
+      text: '是否要針對此任務重新開始處理？',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: '重新開始'
+    }).then(r => r.isConfirmed);
+    if (!ok) return;
+
+    // TODO：改為呼叫後端 API（例：PATCH /api/schedule/restart/:scheduleId）
+    updateLocalStatus(id, '未完成');
+    Swal.fire('已重新開始', '', 'info');
+  });
+});

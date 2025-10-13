@@ -367,28 +367,54 @@
 
   function fetchCarbonEmissionHistory(range = 'week') {
     const now = new Date();
-    const days = range === 'month' ? 30 : 7;
     const base = {};
 
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - i);
-      const iso = getLocalISODate(d);
-      const label = `${d.getMonth() + 1}/${d.getDate()}`;
-      base[iso] = {
-        dateLabel: label,
-        dateStr: iso,
-        carbon: {
-          electricity: 0,
-          solid: 0,
-          liquid: 0,
-          gas: 0,
-          mobile: 0,
-          'fuel-burning': 0,
-          'process': 0,
-          'emission': 0
-        }
-      };
+    if (range === 'month') {
+      // 本月模式：從當月第一天到最後一天
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      
+      for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+        const iso = getLocalISODate(d);
+        const label = `${d.getMonth() + 1}/${d.getDate()}`;
+        base[iso] = {
+          dateLabel: label,
+          dateStr: iso,
+          carbon: {
+            electricity: 0,
+            solid: 0,
+            liquid: 0,
+            gas: 0,
+            mobile: 0,
+            'fuel-burning': 0,
+            'process': 0,
+            'emission': 0
+          }
+        };
+      }
+    } else {
+      // 本週模式：過去 7 天
+      const days = 7;
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(now.getDate() - i);
+        const iso = getLocalISODate(d);
+        const label = `${d.getMonth() + 1}/${d.getDate()}`;
+        base[iso] = {
+          dateLabel: label,
+          dateStr: iso,
+          carbon: {
+            electricity: 0,
+            solid: 0,
+            liquid: 0,
+            gas: 0,
+            mobile: 0,
+            'fuel-burning': 0,
+            'process': 0,
+            'emission': 0
+          }
+        };
+      }
     }
 
     const records = getRecords();
@@ -531,13 +557,22 @@
       const dailyData = apiData.dailyEmissionsByClass;
       const categories = dailyData.map(d => d.dateLabel);
       
-      // 保留所有五個系列，但突出顯示選定的類別
+      // 計算累積值函數
+      const calculateCumulative = (values) => {
+        let cumulative = 0;
+        return values.map(value => {
+          cumulative += value;
+          return parseFloat(cumulative.toFixed(2));
+        });
+      };
+      
+      // 保留所有五個系列，但突出顯示選定的類別，並計算累積值
       const actualSeries = [
-        { name: '燃料燃燒', data: dailyData.map(d => d.class1) },
-        { name: '製程',     data: dailyData.map(d => d.class2) },
-        { name: '逸散',     data: dailyData.map(d => d.class3) },
-        { name: '移動',     data: dailyData.map(d => d.class4) },
-        { name: '電力使用', data: dailyData.map(d => d.class5) }
+        { name: '燃料燃燒', data: calculateCumulative(dailyData.map(d => d.class1)) },
+        { name: '製程',     data: calculateCumulative(dailyData.map(d => d.class2)) },
+        { name: '逸散',     data: calculateCumulative(dailyData.map(d => d.class3)) },
+        { name: '移動',     data: calculateCumulative(dailyData.map(d => d.class4)) },
+        { name: '電力使用', data: calculateCumulative(dailyData.map(d => d.class5)) }
       ];
       const allNames = actualSeries.map(s => s.name);
 
@@ -589,19 +624,39 @@
         },
         series: series,
         stroke: { curve: 'smooth', width: 2 },
-        xaxis: { categories, tickPlacement: 'on' },
-        yaxis: { title: { text: '碳排放 (kg CO₂e)' }, min: 0 },
+        xaxis: { 
+          categories, 
+          tickPlacement: 'on',
+          labels: {
+            rotate: 0,
+            trim: false,
+            hideOverlappingLabels: false,
+            style: {
+              fontSize: '11px'
+            },
+            formatter: function(value) {
+              return value; // 直接顯示日期標籤，不進行額外格式化
+            }
+          },
+          axisBorder: {
+            show: true
+          },
+          axisTicks: {
+            show: true
+          }
+        },
+        yaxis: { title: { text: '累積碳排放 (kg CO₂e)' }, min: 0 },
         legend: {
           position: 'bottom',
           horizontalAlign: 'center',
           onItemClick: { toggleDataSeries: false }
         },
-        tooltip: { shared: true, intersect: false, y: { formatter: v => `${v} kg CO₂e` } },
+        tooltip: { shared: true, intersect: false, y: { formatter: v => `累積: ${v} kg CO₂e` } },
         colors: colors
       };
 
       if (carbonApexChart) {
-        carbonApexChart.updateOptions({ series, colors }, false, true);
+        carbonApexChart.updateOptions({ series, colors, xaxis: { categories } }, false, true);
       } else {
         carbonApexChart = new ApexCharts(
           document.querySelector('#energyTrendChart'),
@@ -645,13 +700,25 @@
       const dailyData = apiData.dailyEmissionsByClass;
       const categories = dailyData.map(d => d.dateLabel);
       
-      // 只保留五個系列，按照指定順序
+      console.log(`📊 前端圖表資料: range=${range}, 日期數量=${dailyData.length}`);
+      console.log(`📊 前端日期標籤:`, categories);
+      
+      // 計算累積值函數
+      const calculateCumulative = (values) => {
+        let cumulative = 0;
+        return values.map(value => {
+          cumulative += value;
+          return parseFloat(cumulative.toFixed(2));
+        });
+      };
+      
+      // 只保留五個系列，按照指定順序，並計算累積值
       const actualSeries = [
-        { name: '燃料燃燒', data: dailyData.map(d => d.class1) }, // class 1 - 從 API 取得
-        { name: '製程',     data: dailyData.map(d => d.class2) }, // class 2 - 從 API 取得
-        { name: '逸散',     data: dailyData.map(d => d.class3) }, // class 3 - 從 API 取得
-        { name: '移動',     data: dailyData.map(d => d.class4) }, // class 4 - 從 API 取得
-        { name: '電力使用', data: dailyData.map(d => d.class5) }  // class 5 - 從 API 取得
+        { name: '燃料燃燒', data: calculateCumulative(dailyData.map(d => d.class1)) }, // class 1 - 累積值
+        { name: '製程',     data: calculateCumulative(dailyData.map(d => d.class2)) }, // class 2 - 累積值
+        { name: '逸散',     data: calculateCumulative(dailyData.map(d => d.class3)) }, // class 3 - 累積值
+        { name: '移動',     data: calculateCumulative(dailyData.map(d => d.class4)) }, // class 4 - 累積值
+        { name: '電力使用', data: calculateCumulative(dailyData.map(d => d.class5)) }  // class 5 - 累積值
       ];
       const allNames = actualSeries.map(s => s.name);
 
@@ -688,20 +755,40 @@
         },
         series: series,
         stroke: { curve: 'smooth', width: 2 },
-        xaxis: { categories, tickPlacement: 'on' },
-        yaxis: { title: { text: '碳排放 (kg CO₂e)' }, min: 0 },
+        xaxis: { 
+          categories, 
+          tickPlacement: 'on',
+          labels: {
+            rotate: 0,
+            trim: false,
+            hideOverlappingLabels: false,
+            style: {
+              fontSize: '11px'
+            },
+            formatter: function(value) {
+              return value; // 直接顯示日期標籤，不進行額外格式化
+            }
+          },
+          axisBorder: {
+            show: true
+          },
+          axisTicks: {
+            show: true
+          }
+        },
+        yaxis: { title: { text: '累積碳排放 (kg CO₂e)' }, min: 0 },
         legend: {
           position: 'bottom',
           horizontalAlign: 'center',
           // 關閉預設點 legend 就隱藏 series 的行為
           onItemClick: { toggleDataSeries: false }
         },
-        tooltip: { shared: true, intersect: false, y: { formatter: v => `${v} kg CO₂e` } },
+        tooltip: { shared: true, intersect: false, y: { formatter: v => `累積: ${v} kg CO₂e` } },
         colors: [...normalColors, '#888888'] // 使用 normalColors + 全部按鈕灰色
       };
 
       if (carbonApexChart) {
-        carbonApexChart.updateOptions({ series, colors: [...normalColors, '#888888'] }, false, true);
+        carbonApexChart.updateOptions({ series, colors: [...normalColors, '#888888'], xaxis: { categories } }, false, true);
       } else {
         carbonApexChart = new ApexCharts(
           document.querySelector('#energyTrendChart'),
@@ -780,7 +867,7 @@
     };
 
     if (carbonApexChart) {
-      carbonApexChart.updateOptions({ series }, false, true);
+      carbonApexChart.updateOptions({ series, xaxis: { categories } }, false, true);
     } else {
       carbonApexChart = new ApexCharts(
         document.querySelector('#energyTrendChart'),
@@ -892,106 +979,69 @@
       // 提交每個燃料消耗記錄
       const submitPromises = fuelInputs.map(async (input) => {
         const headers = {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'application/json'
         };
-
-        const requestData = {
-          carbonId: input.carbonId,
-          consumption: input.consumption,
-          calculationDate: getLocalISODate()
-        };
-
-        console.log(`📤 提交燃料: ${input.fuelName}, 消耗量: ${input.consumption}`);
-        console.log('📤 請求資料:', requestData);
-        console.log('📤 請求標頭:', headers);
-
-        const response = await fetch(`${API_BASE}/carbon/recordEnergyConsume`, {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify(requestData)
-        });
-
-        console.log(`📡 回應狀態: ${response.status}`);
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('❌ API 錯誤回應:', errorText);
-          throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
         }
-
-        const result = await response.json();
-        console.log(`✅ ${input.fuelName} 提交成功:`, result);
-        
-        return result;
+        try {
+          const payload = { carbonId: input.carbonId, consumption: input.consumption };
+          const response = await fetch(`${API_BASE}/carbon/recordEnergyConsume`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload)
+          });
+          if (!response.ok) {
+            console.warn('提交失敗，狀態碼:', response.status);
+          }
+        } catch (e) {
+          console.warn('提交發生錯誤:', e);
+        }
       });
 
-      // 等待所有提交完成
-      const results = await Promise.all(submitPromises);
-      
-      console.log('🎉 所有燃料消耗記錄提交完成:', results);
-      
-      // 顯示成功訊息
-      const totalRecords = results.length;
-      Swal.fire({
-        icon: 'success',
-        title: '提交成功',
-        text: `已成功記錄 ${totalRecords} 種燃料的消耗資料`,
-        timer: 3000
-      });
+      await Promise.all(submitPromises);
+      console.log('✅ 提交完成');
 
-      // 更新圖表
-      const activeRange = $('.btn-range-toggle .btn.active').data('range') || 'week';
-      renderCarbonEmissionChart(activeRange);
-
-      // 清空表單
-      $('.fuel-input').val('');
+      // 重新載入圖表
+      await renderCarbonEmissionChart(currentChartRange || 'week');
 
     } catch (error) {
-      console.error('❌ 提交能源消耗資料時發生錯誤:', error);
-      console.error('❌ 錯誤詳情:', error.stack);
-      Swal.fire({
-        icon: 'error',
-        title: '提交失敗',
-        text: '提交能源消耗資料時發生錯誤: ' + error.message
-      });
+      console.error('❌ 提交能源消耗資料失敗:', error);
     }
   }
 
-  // --------- init & bindings ---------
-  $(document).ready(async function () {
-    console.log('🚀 頁面初始化開始...');
-    
+  // 載入頁面時執行
+  $(document).ready(function() {
     // 載入所有分頁的燃料資料
-    try {
-      await loadAllFuelTabs();
-    } catch (error) {
-      console.error('❌ 載入燃料資料時發生錯誤:', error);
-      console.error('❌ 錯誤堆疊:', error.stack);
-      
-      // 顯示錯誤訊息
-      const errorHtml = '<div class="alert alert-danger">載入燃料資料失敗: ' + error.message + '</div>';
-      $('#tab-solid, #tab-liquid, #tab-gas, #tab-mobile, #tab-electricity').html(errorHtml);
-    }
+    loadAllFuelTabs();
 
-    // 初始畫本週
+    // 設定提醒時間
+    remindIfNotSubmitted();
+
+    // 初始化圖表，預設週
     renderCarbonEmissionChart('week');
 
-    // range 切換
-    $('.btn-range-toggle .btn').on('click', function () {
-      $('.btn-range-toggle .btn').removeClass('active');
-      $(this).addClass('active');
-      const range = $(this).data('range');
-      renderCarbonEmissionChart(range);
-    });
-
-    // 提交表單 - 修改為調用新的API
-    $('#energy-form').on('submit', function (e) {
+    // 綁定提交：攔截表單提交
+    $('#energy-form').on('submit', function(e) {
       e.preventDefault();
       submitEnergyConsumption();
     });
 
-    // reminder 每分鐘檢查
-    setInterval(remindIfNotSubmitted, 60 * 1000);
-    remindIfNotSubmitted();
+    // 綁定範圍切換（本週 / 本月）
+    $('.btn-range-toggle [data-range]').on('click', function(e) {
+      e.preventDefault();
+      const range = $(this).data('range');
+      $('.btn-range-toggle .btn').removeClass('active');
+      $(this).addClass('active');
+      currentChartRange = range;
+      renderCarbonEmissionChart(range);
+    });
+
+    // 綁定切換分頁事件
+    $('#energyTabs a').on('shown.bs.tab', function (e) {
+      const target = $(e.target).attr('href');
+      if (target === '#tab-solid') {
+        loadAllFuelTabs();
+      }
+    });
   });

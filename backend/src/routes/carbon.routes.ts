@@ -434,8 +434,7 @@ router.post('/recordEnergyConsume', authenticateToken, async (req, res) => {
     console.log(`  NF3 GWP: ${nf3GwpEmission} (${nf3Emission} × ${fuel.nf3gwp})`);
 
     // 計算總排放量 (所有GWP加權排放量之和)
-    const totalEmission = co2GwpEmission + ch4GwpEmission + n2oGwpEmission + 
-                         pfcsGwpEmission + hfcsGwpEmission + sf6GwpEmission + nf3GwpEmission;
+    const totalEmission = (co2GwpEmission + ch4GwpEmission + n2oGwpEmission + pfcsGwpEmission + hfcsGwpEmission + sf6GwpEmission + nf3GwpEmission);
 
     console.log(`🎯 總排放量: ${totalEmission}`);
 
@@ -527,6 +526,8 @@ router.get('/my-calculations', authenticateToken, async (req, res) => {
     const userRole = req.user?.role;
     const groupByClass = req.query.groupByClass === 'true';
     const range = req.query.range as string;
+    
+    console.log(`🔍 API 請求參數: groupByClass=${groupByClass}, range=${range}`);
 
     if (!userId) {
       return res.status(401).json({
@@ -579,12 +580,40 @@ router.get('/my-calculations', authenticateToken, async (req, res) => {
       let filteredCalculations = calculationsWithClass;
       if (range === 'week' || range === 'month') {
         const now = new Date();
-        const days = range === 'month' ? 30 : 7;
-        const cutoffDate = new Date(now.getTime() - (days * 24 * 60 * 60 * 1000));
-        const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+        let startDate: string;
+        let endDate: string;
+        
+        if (range === 'week') {
+          // 計算當週的週一到週日
+          const dayOfWeek = now.getDay(); // 0=週日, 1=週一, ..., 6=週六
+          const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // 週日時回到上週一
+          const monday = new Date(now);
+          monday.setDate(now.getDate() + mondayOffset);
+          monday.setHours(0, 0, 0, 0);
+          
+          const sunday = new Date(monday);
+          sunday.setDate(monday.getDate() + 6);
+          sunday.setHours(23, 59, 59, 999);
+          
+          startDate = monday.toISOString().split('T')[0];
+          endDate = sunday.toISOString().split('T')[0];
+        } else {
+          // 計算當月的1號到月底
+          const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+          const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          
+          console.log(`📅 本月計算: 當前時間 ${now.toISOString()}`);
+          console.log(`📅 本月計算: 年份 ${now.getFullYear()}, 月份 ${now.getMonth()}`);
+          console.log(`📅 本月計算: 第一天 ${firstDay.toISOString()}, 最後一天 ${lastDay.toISOString()}`);
+          
+          startDate = firstDay.toISOString().split('T')[0];
+          endDate = lastDay.toISOString().split('T')[0];
+        }
+        
+        console.log(`📅 篩選日期範圍: ${startDate} 到 ${endDate}`);
         
         filteredCalculations = calculationsWithClass.filter(calc => 
-          calc.calculationDate >= cutoffDateStr
+          calc.calculationDate >= startDate && calc.calculationDate <= endDate
         );
       }
 
@@ -608,24 +637,98 @@ router.get('/my-calculations', authenticateToken, async (req, res) => {
         dailyGroupsByClass[date][classKey] += record.totalEmission;
       });
 
-      // 轉換為陣列格式並排序
-      const dailyEmissionsByClass = Object.keys(dailyGroupsByClass)
-        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
-        .map(date => {
-          const data = dailyGroupsByClass[date];
-          const dateObj = new Date(date);
-          const dateLabel = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+      // 生成完整的日期範圍（包含沒有資料的日期）
+      const generateDateRange = (startDate: string, endDate: string) => {
+        const dates = [];
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          dates.push(d.toISOString().split('T')[0]);
+        }
+        return dates;
+      };
+
+      // 取得日期範圍
+      const allDates = Object.keys(dailyGroupsByClass);
+      let dailyEmissionsByClass;
+      
+      // 確定要使用的日期範圍
+      let rangeStartDate: string;
+      let rangeEndDate: string;
+      
+      if (range === 'week' || range === 'month') {
+        // 使用已計算的週/月範圍
+        const now = new Date();
+        if (range === 'week') {
+          const dayOfWeek = now.getDay();
+          const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+          const monday = new Date(now);
+          monday.setDate(now.getDate() + mondayOffset);
+          rangeStartDate = monday.toISOString().split('T')[0];
           
-          return {
-            date: date,
-            dateLabel: dateLabel,
-            class1: parseFloat(data.class1.toFixed(2)),
-            class2: parseFloat(data.class2.toFixed(2)),
-            class3: parseFloat(data.class3.toFixed(2)),
-            class4: parseFloat(data.class4.toFixed(2)),
-            class5: parseFloat(data.class5.toFixed(2))
-          };
-        });
+          const sunday = new Date(monday);
+          sunday.setDate(monday.getDate() + 6);
+          rangeEndDate = sunday.toISOString().split('T')[0];
+        } else {
+          const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+          const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          
+          console.log(`📅 本月範圍計算: 當前時間 ${now.toISOString()}`);
+          console.log(`📅 本月範圍計算: 年份 ${now.getFullYear()}, 月份 ${now.getMonth()}`);
+          console.log(`📅 本月範圍計算: 第一天 ${firstDay.toISOString()}, 最後一天 ${lastDay.toISOString()}`);
+          
+          rangeStartDate = firstDay.toISOString().split('T')[0];
+          rangeEndDate = lastDay.toISOString().split('T')[0];
+          
+          console.log(`📅 本月範圍結果: ${rangeStartDate} 到 ${rangeEndDate}`);
+        }
+      } else {
+        // 沒有特定範圍時，使用資料的日期範圍
+        if (allDates.length === 0) {
+          const now = new Date();
+          rangeStartDate = now.toISOString().split('T')[0];
+          rangeEndDate = now.toISOString().split('T')[0];
+        } else {
+          const sortedDates = allDates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+          rangeStartDate = sortedDates[0];
+          rangeEndDate = sortedDates[sortedDates.length - 1];
+        }
+      }
+      
+      // 生成完整的日期範圍
+      const fullDateRange = generateDateRange(rangeStartDate, rangeEndDate);
+      
+      console.log(`📅 完整日期範圍: ${rangeStartDate} 到 ${rangeEndDate}`);
+      console.log(`📅 生成的日期陣列:`, fullDateRange.slice(0, 5), '...', fullDateRange.slice(-5));
+      
+      dailyEmissionsByClass = fullDateRange.map((date, index) => {
+        const data = dailyGroupsByClass[date] || {
+          class1: 0,
+          class2: 0,
+          class3: 0,
+          class4: 0,
+          class5: 0
+        };
+        // 修正時區問題：直接從日期字串解析，避免時區轉換
+        const [year, month, day] = date.split('-');
+        const dateLabel = `${parseInt(month)}/${parseInt(day)}`;
+        
+        // 除錯：顯示前幾個日期標籤
+        if (index < 5) {
+          console.log(`📅 日期標籤: ${date} -> ${dateLabel}`);
+        }
+        
+        return {
+          date: date,
+          dateLabel: dateLabel,
+          class1: parseFloat(data.class1.toFixed(2)),
+          class2: parseFloat(data.class2.toFixed(2)),
+          class3: parseFloat(data.class3.toFixed(2)),
+          class4: parseFloat(data.class4.toFixed(2)),
+          class5: parseFloat(data.class5.toFixed(2))
+        };
+      });
 
       // 計算摘要統計
       const summary = {
@@ -659,7 +762,7 @@ router.get('/my-calculations', authenticateToken, async (req, res) => {
           dailyEmissionsByClass: dailyEmissionsByClass,
           summary: summary
         },
-        message: `成功取得 ${filteredCalculations.length} 筆計算記錄，共 ${days} 天，按類別分組`
+        message: `成功取得 ${filteredCalculations.length} 筆計算記錄，共 ${dailyEmissionsByClass.length} 天，按類別分組`
       });
     } else {
       // 原有行為：按天分區處理資料

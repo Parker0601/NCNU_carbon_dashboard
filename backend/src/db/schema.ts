@@ -6,6 +6,7 @@ export const scrapStatusEnum = pgEnum('scrap_status', ['1', '2', '3']);
 export const deviceStatusEnum = pgEnum('device_status', ['1', '2', '3']); // 1:正常運行, 2:維護中, 3:故障
 export const issueStatusEnum = pgEnum('issue_status', ['1', '2', '3']); // 1:待處理, 2:處理中, 3:已解決
 export const userRoleEnum = pgEnum('user_role', ['1', '2', '3']); // 1:一般員工, 2:主管, 3:老闆
+export const userStatusEnum = pgEnum('user_status', ['idle', 'busy']); // 員工狀態: 閒置, 忙碌
 export const scheduleStatusEnum = pgEnum('schedule_status', ['assigned', 'accepted', 'submitted', 'approved', 'rejected']); // 指派未接受, 指派已接受, 送出審核, 已過審, 已退回
 
 // users table
@@ -15,7 +16,7 @@ export const users = pgTable('users', {
   password: text('password').notNull(),
   role: userRoleEnum('role').notNull(),
   mail: text('mail'),
-  status: text('status'), // 員工狀態: 'idle' | 'busy' | null (只有 role=1 會用到)
+  status: userStatusEnum('status'), // 員工狀態: 'idle' | 'busy' (只有 role=1 會用到)
   createTime: timestamp('create_time').notNull(),
 });
 

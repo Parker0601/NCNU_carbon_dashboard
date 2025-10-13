@@ -35,6 +35,7 @@ router.post('/register', async (req: Request, res: Response) => {
         password: hashedPassword,
         role: USER_ROLES.EMPLOYEE, // 默認為員工角色
         mail: validatedData.email,
+        status: 'idle', // 新員工預設為空閒狀態
         createTime: new Date(),
       })
       .returning({

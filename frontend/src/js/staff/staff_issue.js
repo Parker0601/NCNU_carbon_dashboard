@@ -1,3 +1,5 @@
+const STATUS_LABEL = { '1': '待處理', '2': '處理中', '3': '已解決' };
+const DEVICE_STATUS_LABEL = { '1': '正常運行', '2': '維護中', '3': '故障' };
 // ======================== 基礎設定 ========================
 function getConfig() {
   const el = document.getElementById('app-config');
@@ -140,8 +142,10 @@ function showReportForm() {
           return;
         }
         sel.innerHTML = list.map(d => {
-          const label = `${d.name || ('設備#' + d.id)}（目前狀態：${d.status}）`;
-          return `<option value="${d.id}">${label}</option>`;
+        const s = String(d.status ?? '');
+        const sLabel = DEVICE_STATUS_LABEL[s] || s || '-';
+        const label = `${d.name || ('設備#' + d.id)}（目前狀態：${sLabel}）`;
+        return `<option value="${d.id}">${label}</option>`;
         }).join('');
       } catch (e) {
         sel.innerHTML = `<option disabled selected>載入失敗：${e.message}</option>`;
@@ -172,7 +176,6 @@ function showReportForm() {
 }
 
 // ======================== 問題清單（載入/渲染） ========================
-const STATUS_LABEL = { '1': '待處理', '2': '處理中', '3': '已解決' };
 
 async function fetchIssues() {
   const { routes } = getConfig();

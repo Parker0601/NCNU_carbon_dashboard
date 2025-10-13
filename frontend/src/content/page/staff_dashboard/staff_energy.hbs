@@ -51,12 +51,16 @@
   }
   .unit-label {
     position: absolute;
-    right: 8px;
+    right: 16px; /* 往左移一些，避免貼齊或超出格子 */
     top: 50%;
     transform: translateY(-50%);
     font-size: .75rem;
     color: #6c757d;
     pointer-events: none;
+  }
+  /* 預留右側空間給單位文字，避免被覆蓋或超出 */
+  .fuel-card .form-control {
+    padding-right: 3.5rem;
   }
   /* 趨勢與摘要容器 */
   #trend-wrapper {

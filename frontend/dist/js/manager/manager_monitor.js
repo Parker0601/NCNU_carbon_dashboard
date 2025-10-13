@@ -5,10 +5,7 @@ const DEVICE_STATUS_LABEL = { '1': '正常運行', '2': '維護中', '3': '故�
 // 2) API Root & Routes
 const API_ROOT = document.getElementById('app-config')?.dataset?.apiRoot || 'http://localhost:3000/api';
 const ROUTES = {
-  // 左側異常清單：如果你已做 /devices/abnormal?in=2,3 更好；沒做就先用 /devices/status 然後前端過濾
-  devicesStatus: `${API_ROOT}/devices/status`,
-  // 右側人員清單：若後端尚未提供，會自動 fallback demo
-  staffList:     `${API_ROOT}/schedules/assignees`,
+  assignSnapshot: `${API_ROOT}/schedule/assign-human-resource`,
   // 主管分派：一次更新 Device / Schedule / MaintainRecord
   assign:        `${API_ROOT}/devices/assign`,
 };
@@ -46,14 +43,34 @@ async function apiFetch(url, { method = 'GET', body, headers = {} } = {}) {
 const staffModel = []; // [{id,name,status:'idle'|'busy', task?:string}, ...]
 
 
-// ======================== 左側：異常清單 ========================
-async function loadAlerts() {
-  // 取得全部設備狀態
-  const { data = [] } = await apiFetch(ROUTES.devicesStatus);
-  // 只保留 2(維護中) 與 3(故障)
-  const abnormal = data.filter(d => String(d.status) === '2' || String(d.status) === '3');
-  renderAlertList(abnormal);
+// 新增：一次載入「故障清單 + 人員清單 + 問題清單」
+async function loadSnapshot() {
+  const { data } = await apiFetch(ROUTES.assignSnapshot);
+  // 左側：故障機台
+  const faultyDevices = data?.faultyDevices ?? [];
+  renderAlertList(faultyDevices.map(d => ({
+    id: d.deviceId,
+    name: d.deviceName,
+    status: Number(d.deviceStatus)  // 你的回傳是 '3' 字串，轉一下也可
+  })));
+
+  // 右側：人員（用 users.status 判斷 idle/busy）
+  const staff = data?.availableStaff ?? [];
+  staffModel.length = 0;
+  staff.forEach(s => {
+    // 規則：userStatus === 'busy' 視為忙碌，其餘視為空閒
+    const status = String(s.userStatus).toLowerCase() === 'busy' ? 'busy' : 'idle';
+    staffModel.push({
+      id:   s.userId,
+      name: s.userName,
+      status,
+      task: '-' // 你的 existingIssues 目前沒有「受指派者」欄位，先留空
+    });
+  });
+
+  // 如果你想用 existingIssues 做別的顯示，也可在這裡接 data.existingIssues
 }
+
 
 function renderAlertList(list) {
   if (!Array.isArray(list) || !list.length) {
@@ -98,53 +115,42 @@ function bindLeftPanelEvents() {
 }
 
 
-// ======================== 右側：人員清單 ========================
-async function loadAssignPageData() {
-  // 讀人員（API 存在則用，否則 fallback demo）
-  try {
-    const { data = [] } = await apiFetch(ROUTES.staffList);
-    staffModel.length = 0;
-    staffModel.push(...data);
-  } catch (err) {
-    console.warn('staffList API 不可用，使用 demo 資料。', err?.message || err);
-    staffModel.length = 0;
-    staffModel.push(
-      { id: 1, name: '王小明', status: 'idle', task: '' },
-      { id: 2, name: '林小華', status: 'busy', task: '設備#12 維修' },
-      { id: 3, name: '趙小美', status: 'idle', task: '' }
-    );
-  }
+// ======================== 右側人員表 ========================
+
+// 綁定右上角排序下拉
+function bindStaffEvents() {
+  $('#staff-sort-order').on('change', renderStaffTable);
 }
 
+// 根據 staffModel 重新渲染表格
 function renderStaffTable() {
   const order = $('#staff-sort-order').val();
   const arr = [...staffModel];
-  // 排序：空閒優先 / 執行中優先
+
+  // 排序規則
   arr.sort((a, b) => {
     if (order === 'idleFirst') {
       return (a.status === 'idle') === (b.status === 'idle') ? 0 : (a.status === 'idle' ? -1 : 1);
-    }
-    if (order === 'busyFirst') {
-      return (a.status === 'busy') === (b.status === 'busy') ? 0 : (a.status === 'busy' ? -1 : 1);
+    } else if (order === 'busyFirst') {
+      return (a.status === 'busy') === (b.status === 'busy') ? -1 : 1;
     }
     return 0;
   });
 
+  // 建出每一列
   const rows = arr.map(s => `
     <tr>
       <td>${s.name}</td>
-      <td>${s.status === 'idle'
-        ? '<span class="status-badge-idle">空閒</span>'
-        : '<span class="status-badge-busy">執行中</span>'}</td>
+      <td>${
+        s.status === 'idle'
+          ? '<span class="status-badge-idle">空閒</span>'
+          : '<span class="status-badge-busy">執行中</span>'
+      }</td>
       <td>${s.task || '-'}</td>
     </tr>
   `).join('');
 
-  $('#tbl-staff tbody').html(rows);
-}
-
-function bindStaffEvents() {
-  $('#staff-sort-order').on('change', renderStaffTable);
+  $('#tbl-staff tbody').html(rows || '<tr><td colspan="3" class="text-center text-muted">目前沒有人員資料</td></tr>');
 }
 
 
@@ -219,7 +225,7 @@ async function openAssignDialog(device) {
       await Swal.fire('已指派', '已同步更新裝置/排程/維護紀錄', 'success');
 
       // 成功後刷新左右資料
-      await Promise.all([ loadAlerts(), loadAssignPageData() ]);
+      await loadSnapshot();
       renderStaffTable();
     } catch (e) {
       Swal.fire('指派失敗', e.message || '請稍後再試', 'error');
@@ -232,13 +238,9 @@ async function openAssignDialog(device) {
 function startAutoRefresh() {
   stopAutoRefresh?.();
   window.__monitorTimer = setInterval(async () => {
-    try {
-      await Promise.all([ loadAlerts(), loadAssignPageData() ]);
-      renderStaffTable();
-    } catch (e) {
-      console.error('[auto-refresh]', e);
-    }
-  }, 30000); // 30s 一次
+    await loadSnapshot();
+    renderStaffTable();
+  }, 30000);
 }
 function stopAutoRefresh() { clearInterval(window.__monitorTimer); }
 
@@ -247,10 +249,7 @@ function stopAutoRefresh() { clearInterval(window.__monitorTimer); }
 async function init() {
   bindLeftPanelEvents();   // 左側「指派」按鈕（事件委派）
   bindStaffEvents();       // 右上排序下拉
-  await Promise.all([
-    loadAlerts(),          // 左側異常
-    loadAssignPageData(),  // 右側人員
-  ]);
+  await loadSnapshot();
   renderStaffTable();
   startAutoRefresh();
 }

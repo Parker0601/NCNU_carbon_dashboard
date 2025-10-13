@@ -370,16 +370,22 @@
     const base = {};
 
     if (range === 'month') {
-      // 本月模式：從當月第一天到最後一天
+      // 取得本月的第一天與最後一天
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      
+
+      // 建立一個暫存區，每週一組
+      let weekIndex = 1;
+      let currentWeek = [];
+      let weeklyBase = [];
+
       for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
         const iso = getLocalISODate(d);
-        const label = `${d.getMonth() + 1}/${d.getDate()}`;
-        base[iso] = {
-          dateLabel: label,
-          dateStr: iso,
+        const label = `第${weekIndex}週`;
+
+        currentWeek.push({
+          iso,
+          label,
           carbon: {
             electricity: 0,
             solid: 0,
@@ -390,10 +396,54 @@
             'process': 0,
             'emission': 0
           }
-        };
+        });
+
+        // 每滿 7 天或到月底就收一週
+        if (currentWeek.length === 7 || d.getDate() === lastDay.getDate()) {
+          weeklyBase.push({
+            weekLabel: label,
+            weekStart: currentWeek[0].iso,
+            weekEnd: currentWeek[currentWeek.length - 1].iso,
+            carbon: {
+              electricity: 0,
+              solid: 0,
+              liquid: 0,
+              gas: 0,
+              mobile: 0,
+              'fuel-burning': 0,
+              'process': 0,
+              'emission': 0
+            }
+          });
+          currentWeek = [];
+          weekIndex++;
+        }
       }
+
+      // 匯總資料
+      const records = getRecords();
+      records.forEach(r => {
+        const week = weeklyBase.find(w => r.date >= w.weekStart && r.date <= w.weekEnd);
+        if (!week) return;
+        const carb = computeCarbonFromRecord(r);
+        week.carbon.electricity += carb.electricity;
+        week.carbon.solid += carb.solid;
+        week.carbon.liquid += carb.liquid;
+        week.carbon.gas += carb.gas;
+        week.carbon.mobile += carb.mobile;
+        week.carbon['fuel-burning'] += carb['fuel-burning'];
+        week.carbon['process'] += carb['process'];
+        week.carbon['emission'] += carb['emission'];
+      });
+
+      return weeklyBase.map(w => ({
+        dateLabel: w.weekLabel,
+        dateStr: `${w.weekStart}~${w.weekEnd}`,
+        carbon: w.carbon
+      }));
+
     } else {
-      // 本週模式：過去 7 天
+      // 原本的「本週」邏輯（保留）
       const days = 7;
       for (let i = days - 1; i >= 0; i--) {
         const d = new Date(now);
@@ -415,25 +465,26 @@
           }
         };
       }
+
+      const records = getRecords();
+      records.forEach(r => {
+        const iso = r.date;
+        if (!base[iso]) return;
+        const carb = computeCarbonFromRecord(r);
+        base[iso].carbon.electricity += carb.electricity;
+        base[iso].carbon.solid += carb.solid;
+        base[iso].carbon.liquid += carb.liquid;
+        base[iso].carbon.gas += carb.gas;
+        base[iso].carbon.mobile += carb.mobile;
+        base[iso].carbon['fuel-burning'] += carb['fuel-burning'];
+        base[iso].carbon['process'] += carb['process'];
+        base[iso].carbon['emission'] += carb['emission'];
+      });
+
+      return Object.values(base);
     }
-
-    const records = getRecords();
-    records.forEach(r => {
-      const iso = r.date;
-      if (!base[iso]) return;
-      const carb = computeCarbonFromRecord(r);
-      base[iso].carbon.electricity += carb.electricity;
-      base[iso].carbon.solid += carb.solid;
-      base[iso].carbon.liquid += carb.liquid;
-      base[iso].carbon.gas += carb.gas;
-      base[iso].carbon.mobile += carb.mobile;
-      base[iso].carbon['fuel-burning'] += carb['fuel-burning'];
-      base[iso].carbon['process'] += carb['process'];
-      base[iso].carbon['emission'] += carb['emission'];
-    });
-
-    return Object.values(base);
   }
+
 
   // --------- render ---------
   function ensureTrendSummaryContainer() {
@@ -477,6 +528,77 @@
     $tbody.append(row('逸散', summary.class3.total, summary.class3.avg, highlightClass === '3'));
     $tbody.append(row('移動', summary.class4.total, summary.class4.avg, highlightClass === '4'));
     $tbody.append(row('電力使用', summary.class5.total, summary.class5.avg, highlightClass === '5'));
+  }
+
+  // ====================================================
+  // 將每日資料彙總為每週
+  // ====================================================
+  function aggregateMonthToWeeks(dailyData) {
+    if (!Array.isArray(dailyData) || dailyData.length === 0) return dailyData;
+
+    // 取得本月起訖（依使用者當下月份）
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay  = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    // 工具：把各種欄位還原成 ISO yyyy-mm-dd
+    const toISO = (d) => {
+      const iso = d.date || d.dateStr || d.iso;
+      if (iso) return iso; // 已有 ISO 就用
+      // 從 dateLabel（例如 "10/1" 或 "10/01"）推回當年 ISO
+      if (d.dateLabel && /^\d{1,2}\/\d{1,2}$/.test(d.dateLabel)) {
+        const [m, day] = d.dateLabel.split('/').map(x => parseInt(x, 10));
+        const yyyy = now.getFullYear();
+        const mm = String(m).padStart(2, '0');
+        const dd = String(day).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      }
+      return null;
+    };
+
+    // 1) 轉成含 iso 的清單並排序
+    const withIso = dailyData
+      .map(d => ({ ...d, _iso: toISO(d) }))
+      .filter(d => !!d._iso)
+      .sort((a, b) => a._iso.localeCompare(b._iso));
+
+    // 2) 過濾出本月範圍（不含前一個月、不含下一個月）
+    const monthStartISO = `${firstDay.getFullYear()}-${String(firstDay.getMonth()+1).padStart(2,'0')}-${String(firstDay.getDate()).padStart(2,'0')}`;
+    const monthEndISO   = `${lastDay.getFullYear()}-${String(lastDay.getMonth()+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
+    const onlyThisMonth = withIso.filter(d => d._iso >= monthStartISO && d._iso <= monthEndISO);
+
+    // 3) 從「每月 1 號」開始，每 7 天做一組
+    const weeks = [];
+    let weekIdx = 1;
+    for (let i = 0; i < onlyThisMonth.length; i += 7) {
+      const chunk = onlyThisMonth.slice(i, i + 7);
+      const w = {
+        label: `第${weekIdx}週`,
+        class1: 0, class2: 0, class3: 0, class4: 0, class5: 0,
+        weekStart: chunk[0]._iso,
+        weekEnd:   chunk[chunk.length - 1]._iso
+      };
+      for (const d of chunk) {
+        w.class1 += d.class1 || 0;
+        w.class2 += d.class2 || 0;
+        w.class3 += d.class3 || 0;
+        w.class4 += d.class4 || 0;
+        w.class5 += d.class5 || 0;
+      }
+      weeks.push({
+        dateLabel: w.label,
+        class1: +w.class1.toFixed(2),
+        class2: +w.class2.toFixed(2),
+        class3: +w.class3.toFixed(2),
+        class4: +w.class4.toFixed(2),
+        class5: +w.class5.toFixed(2),
+        weekStart: w.weekStart,
+        weekEnd: w.weekEnd
+      });
+      weekIdx++;
+    }
+
+    return weeks;
   }
 
   // 保留原有的摘要渲染函數作為備用
@@ -554,7 +676,19 @@
         return;
       }
 
-      const dailyData = apiData.dailyEmissionsByClass;
+      let dailyData = apiData.dailyEmissionsByClass;
+
+      let weekRanges = null;
+      if (range === 'month') {
+        dailyData = aggregateMonthToWeeks(dailyData);
+        const toShort = s => {
+          if (!s) return s;
+          const [y,m,d] = s.split('-');
+          return `${+m}/${+d}`;
+        };
+        weekRanges = dailyData.map(d => `${toShort(d.weekStart)}~${toShort(d.weekEnd)}`);
+      }
+
       const categories = dailyData.map(d => d.dateLabel);
       
       // 計算累積值函數
@@ -634,8 +768,8 @@
             style: {
               fontSize: '11px'
             },
-            formatter: function(value) {
-              return value; // 直接顯示日期標籤，不進行額外格式化
+            formatter: function (val, idx) {
+              return val;
             }
           },
           axisBorder: {
@@ -651,12 +785,58 @@
           horizontalAlign: 'center',
           onItemClick: { toggleDataSeries: false }
         },
-        tooltip: { shared: true, intersect: false, y: { formatter: v => `累積: ${v} kg CO₂e` } },
+          tooltip: {
+            shared: true,
+            intersect: false,
+            // ★ x 軸 tooltip 也顯示日期範圍
+            x: {
+              formatter: function (val, opts) {
+                const i = opts && typeof opts.dataPointIndex === 'number' ? opts.dataPointIndex : -1;
+                if (range === 'month' && weekRanges && i >= 0) {
+                  return `${val}（${weekRanges[i]}）`;
+                }
+                return val;
+              }
+            },
+            y: { formatter: v => `累積: ${v} kg CO₂e` }
+          },
         colors: colors
       };
 
       if (carbonApexChart) {
-        carbonApexChart.updateOptions({ series, colors, xaxis: { categories } }, false, true);
+          carbonApexChart.updateOptions({
+            series,
+            colors,
+            xaxis: {
+              categories,
+              tickPlacement: 'on',
+              labels: {
+                rotate: 0,
+                trim: false,
+                hideOverlappingLabels: false,
+                style: { fontSize: '11px' },
+                formatter: function (val, idx) {
+                  return val;
+                }
+              },
+              axisBorder: { show: true },
+              axisTicks: { show: true }
+            },
+            tooltip: {
+              shared: true,
+              intersect: false,
+              x: {
+                formatter: function (val, opts) {
+                  const i = opts && typeof opts.dataPointIndex === 'number' ? opts.dataPointIndex : -1;
+                  if (range === 'month' && weekRanges && i >= 0 && weekRanges[i]) {
+                    return `${val}（${weekRanges[i]}）`;
+                  }
+                  return val;
+                }
+              },
+              y: { formatter: v => `累積: ${v} kg CO₂e` }
+            }
+          }, false, true);
       } else {
         carbonApexChart = new ApexCharts(
           document.querySelector('#energyTrendChart'),
@@ -697,7 +877,22 @@
       // 儲存資料供後續使用
       currentChartData = apiData;
 
-      const dailyData = apiData.dailyEmissionsByClass;
+      let dailyData = apiData.dailyEmissionsByClass;
+
+      let weekRanges = null;
+      if (range === 'month') {
+        dailyData = aggregateMonthToWeeks(dailyData);
+        // yyyy-mm-dd ~ yyyy-mm-dd（也可做成 m/d~m/d）
+        const toShort = s => {
+          if (!s) return s;
+          const [y,m,d] = s.split('-');
+          return `${+m}/${+d}`;
+        };
+        weekRanges = dailyData.map(d => (d.weekStart && d.weekEnd)
+          ? `${toShort(d.weekStart)}~${toShort(d.weekEnd)}`
+          : null);
+      }
+
       const categories = dailyData.map(d => d.dateLabel);
       
       console.log(`📊 前端圖表資料: range=${range}, 日期數量=${dailyData.length}`);
@@ -765,9 +960,8 @@
             style: {
               fontSize: '11px'
             },
-            formatter: function(value) {
-              return value; // 直接顯示日期標籤，不進行額外格式化
-            }
+            // 本月 => 顯示「第N週（m/d~m/d）」；其它 range 保持原樣
+            formatter: function (val) { return val; }
           },
           axisBorder: {
             show: true
@@ -783,12 +977,55 @@
           // 關閉預設點 legend 就隱藏 series 的行為
           onItemClick: { toggleDataSeries: false }
         },
-        tooltip: { shared: true, intersect: false, y: { formatter: v => `累積: ${v} kg CO₂e` } },
+        tooltip: {
+          shared: true,
+          intersect: false,
+          x: {
+            formatter: function (val, opts) {
+              const i = (opts && typeof opts.dataPointIndex === 'number') ? opts.dataPointIndex : -1;
+              if (range === 'month' && weekRanges && i >= 0 && weekRanges[i]) {
+                return `${val}（${weekRanges[i]}）`;
+              }
+              return val;
+            }
+          },
+          y: { formatter: v => `累積: ${v} kg CO₂e` }
+        },
         colors: [...normalColors, '#888888'] // 使用 normalColors + 全部按鈕灰色
       };
 
       if (carbonApexChart) {
-        carbonApexChart.updateOptions({ series, colors: [...normalColors, '#888888'], xaxis: { categories } }, false, true);
+          carbonApexChart.updateOptions({
+            series,
+            colors: [...normalColors, '#888888'],
+            xaxis: {
+              categories,
+              tickPlacement: 'on',
+              labels: {
+                rotate: 0,
+                trim: false,
+                hideOverlappingLabels: false,
+                style: { fontSize: '11px' },
+                formatter: function (val) { return val; }
+              },
+              axisBorder: { show: true },
+              axisTicks: { show: true }
+            },
+            tooltip: {
+              shared: true,
+              intersect: false,
+              x: {
+                formatter: function (val, opts) {
+                  const i = opts && typeof opts.dataPointIndex === 'number' ? opts.dataPointIndex : -1;
+                  if (range === 'month' && weekRanges && i >= 0 && weekRanges[i]) {
+                    return `${val}（${weekRanges[i]}）`;
+                  }
+                  return val;
+                }
+              },
+              y: { formatter: v => `累積: ${v} kg CO₂e` }
+            }
+          }, false, true);
       } else {
         carbonApexChart = new ApexCharts(
           document.querySelector('#energyTrendChart'),

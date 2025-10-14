@@ -1,6 +1,12 @@
 $(document).ready(function() {
     const API_BASE = 'http://localhost:3000/api';
     const TOKEN_KEYS = ['authToken', 'access_token', 'token'];
+    
+    // 分頁狀態 - 移到最前面避免初始化順序問題
+    let fuelTrendAllItems = [];
+    let fuelTrendRendered = 0;
+    const PAGE_SIZE = 6;
+    
     function getToken() {
         try {
             for (const k of TOKEN_KEYS) {
@@ -200,9 +206,18 @@ $(document).ready(function() {
 
     // 日期區間套用
     $('#mgrApplyRange').on('click', function() {
+        console.log('🔍 [DEBUG] 套用按鈕被點擊');
         const start = $('#mgrStartDate').val();
         const end = $('#mgrEndDate').val();
-        if (!start || !end) return;
+        console.log('🔍 [DEBUG] 套用按鈕 - 開始日期:', start);
+        console.log('🔍 [DEBUG] 套用按鈕 - 結束日期:', end);
+        
+        if (!start || !end) {
+            console.log('🔍 [DEBUG] 套用按鈕 - 日期範圍不完整，取消執行');
+            return;
+        }
+        
+        console.log('🔍 [DEBUG] 套用按鈕 - 開始執行更新');
         fetchBreakdown(start, end);
         resetFuelTrendState();
         renderFuelTrends(start, end, true);
@@ -216,15 +231,28 @@ $(document).ready(function() {
 
     // 顯示更多
     $(document).on('click', '#fuelTrendsLoadMore', function(){
+        console.log('🔍 [DEBUG] 顯示更多按鈕被點擊');
+        
+        // 1. 檢查按鈕狀態
+        console.log('🔍 [DEBUG] 按鈕元素:', $('#fuelTrendsLoadMore'));
+        console.log('🔍 [DEBUG] 按鈕是否隱藏:', $('#fuelTrendsLoadMore').hasClass('d-none'));
+        console.log('🔍 [DEBUG] 按鈕是否禁用:', $('#fuelTrendsLoadMore').prop('disabled'));
+        
         const start = $('#mgrStartDate').val();
         const end = $('#mgrEndDate').val();
+        
+        // 2. 檢查日期範圍
+        console.log('🔍 [DEBUG] 開始日期:', start);
+        console.log('🔍 [DEBUG] 結束日期:', end);
+        
+        // 3. 檢查分頁狀態
+        console.log('🔍 [DEBUG] 總項目數:', fuelTrendAllItems.length);
+        console.log('🔍 [DEBUG] 已渲染數:', fuelTrendRendered);
+        console.log('🔍 [DEBUG] 是否還有更多:', fuelTrendRendered < fuelTrendAllItems.length);
+        console.log('🔍 [DEBUG] 下一批要渲染的項目:', fuelTrendAllItems.slice(fuelTrendRendered, fuelTrendRendered + PAGE_SIZE));
+        
         renderFuelTrends(start, end, false);
     });
-
-    // 分頁狀態
-    let fuelTrendAllItems = [];
-    let fuelTrendRendered = 0;
-    const PAGE_SIZE = 6;
 
     function resetFuelTrendState(){
         fuelTrendAllItems = [];
@@ -237,27 +265,41 @@ $(document).ready(function() {
 
     async function renderFuelTrends(startDate, endDate, fetchListIfNeeded = false) {
         try {
+            console.log('🔍 [DEBUG] renderFuelTrends 開始執行');
+            console.log('🔍 [DEBUG] 參數:', { startDate, endDate, fetchListIfNeeded });
+            
             const $row = $('#fuelTrendRow');
-            if ($row.length === 0) return;
+            if ($row.length === 0) {
+                console.log('🔍 [DEBUG] 找不到 #fuelTrendRow 元素');
+                return;
+            }
             const token = getToken();
             const headers = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
             if (fetchListIfNeeded || fuelTrendAllItems.length === 0) {
+                console.log('🔍 [DEBUG] 需要重新取得資料清單');
                 // 先取來源占比，作為清單，依 totalEmission 由大到小排序
                 const url = `${API_BASE}/carbon/emissions-breakdown?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
+                console.log('🔍 [DEBUG] API URL:', url);
                 const res = await fetch(url, { method: 'GET', headers });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const json = await res.json();
+                console.log('🔍 [DEBUG] API 回應:', json);
                 const items = (json && json.data && json.data.breakdown) ? json.data.breakdown : [];
+                console.log('🔍 [DEBUG] 原始項目數:', items.length);
                 // 過濾掉沒有 carbonId 的項目（安全）
                 fuelTrendAllItems = items.filter(it => it.carbonId).sort((a,b) => (b.totalEmission||0) - (a.totalEmission||0));
+                console.log('🔍 [DEBUG] 過濾後項目數:', fuelTrendAllItems.length);
                 fuelTrendRendered = 0;
                 $row.empty();
+            } else {
+                console.log('🔍 [DEBUG] 使用現有資料清單，項目數:', fuelTrendAllItems.length);
             }
 
             // 若沒有資料，顯示提示
             if (fuelTrendAllItems.length === 0) {
+                console.log('🔍 [DEBUG] 沒有資料，顯示提示訊息');
                 $row.html('<div class="col-12"><div class="alert alert-light border">該日期區間沒有資料</div></div>');
                 $('#fuelTrendsLoadMore').addClass('d-none');
                 $('#fuelTrendsNoMore').addClass('d-none');
@@ -266,6 +308,9 @@ $(document).ready(function() {
 
             // 一次渲染最多 PAGE_SIZE 個
             const nextSlice = fuelTrendAllItems.slice(fuelTrendRendered, fuelTrendRendered + PAGE_SIZE);
+            console.log('🔍 [DEBUG] 準備渲染下一批項目:', nextSlice.length, '個');
+            console.log('🔍 [DEBUG] 下一批項目詳情:', nextSlice);
+            
             for (const item of nextSlice) {
                 const carbonId = item.carbonId;
                 const fuelName = item.fuelName;
@@ -295,10 +340,14 @@ $(document).ready(function() {
             }
 
             fuelTrendRendered += nextSlice.length;
+            console.log('🔍 [DEBUG] 更新渲染計數:', fuelTrendRendered, '/', fuelTrendAllItems.length);
+            
             if (fuelTrendRendered >= fuelTrendAllItems.length) {
+                console.log('🔍 [DEBUG] 所有項目已渲染完畢，禁用按鈕');
                 $('#fuelTrendsLoadMore').prop('disabled', true);
                 $('#fuelTrendsNoMore').removeClass('d-none');
             } else {
+                console.log('🔍 [DEBUG] 還有更多項目，啟用按鈕');
                 $('#fuelTrendsLoadMore').prop('disabled', false);
                 $('#fuelTrendsNoMore').addClass('d-none');
             }
@@ -319,8 +368,12 @@ $(document).ready(function() {
         const json = await res.json();
         const list = (json && json.data && json.data.dailyEmissions) ? json.data.dailyEmissions : [];
 
-        // 從 API 回傳中抓最早到最晚，再依區間過濾（含首尾）
-        const filtered = list.filter(d => (!startDate || d.date >= startDate) && (!endDate || d.date <= endDate));
+        // 從 API 回傳中抓最早到最晚，再依區間過濾（含首尾），並按日期排序
+        const filtered = list
+            .filter(d => (!startDate || d.date >= startDate) && (!endDate || d.date <= endDate))
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // 按日期從舊到新排序
+
+        console.log('🔍 [DEBUG] 燃料趨勢資料排序後:', filtered.map(d => d.date));
 
         const labels = filtered.map(d => d.date.substring(5).replace(/^0/, '').replace('-0', '/'));
         const daily = filtered.map(d => d.dailyTotalEmission || 0);

@@ -92,6 +92,7 @@
                     <div style="width:100%; height:400px;">
                         <canvas id="carbonTrendChart"></canvas>
                     </div>
+                    
                 </div>
             </div>
         </div>
@@ -104,6 +105,16 @@
         <div id="panel-2" class="panel">
             <div class="panel-hdr">
                 <h2>碳排放熱點分析</h2>
+                <div class="d-flex align-items-center ml-auto mr-2" id="mgrRangeInline">
+                    <div class="form-inline mr-2 mb-0">
+                        <label class="mr-2">區間：</label>
+                        <input type="date" id="mgrStartDate" class="form-control form-control-sm mr-2">
+                        <span class="mr-2">~</span>
+                        <input type="date" id="mgrEndDate" class="form-control form-control-sm mr-2">
+                        <button id="mgrApplyRange" class="btn btn-sm btn-primary">套用</button>
+                        <small class="text-muted ml-2 d-none d-sm-inline">預設載入當年度</small>
+                    </div>
+                </div>
                 <div class="panel-toolbar">
                     <button class="btn btn-panel" data-action="panel-collapse" data-toggle="tooltip" data-offset="0,10" data-original-title="收合"></button>
                     <button class="btn btn-panel" data-action="panel-fullscreen" data-toggle="tooltip" data-offset="0,10" data-original-title="全螢幕"></button>
@@ -136,7 +147,17 @@
             </div>
         </div>
     </div>
-</div>
+    </div>
+
+    <!-- 燃料趨勢列表（動態生成，每個面板大小與熱點分析相同） -->
+    <div class="row" id="fuelTrendRow"></div>
+    <div class="row mt-2" id="fuelTrendControls">
+        <div class="col-12 text-center">
+            <button id="fuelTrendsLoadMore" class="btn btn-outline-secondary btn-sm">顯示更多</button>
+            <div id="fuelTrendsNoMore" class="text-muted small mt-2 d-none">沒有更多資料了</div>
+        </div>
+    </div>
+ 
 {{/inline}}
 
 {{#*inline "scripts-block"}}

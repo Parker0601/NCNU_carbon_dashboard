@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db/index';
 import { carbon, carbonCalculations, users } from '../db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and, gte, lte } from 'drizzle-orm';
 import { z } from 'zod';
 import { authenticateToken, USER_ROLES, requireRole } from '../middleware/auth';
 
@@ -121,37 +121,6 @@ const calculateEmissionSchema = z.object({
   carbonId: z.string().min(1, '碳排係數ID不能為空'),
   consumption: z.number().positive('消耗量必須大於0'),
   calculationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式必須為 YYYY-MM-DD').optional(),
-});
-
-// 取得所有可用的燃料選單
-//也就是使用者選擇要記錄的燃料的選單
-router.get('/fuels', async (_req, res) => {
-  try {
-    console.log('🔍 取得燃料選單...');
-    
-    const fuels = await db.select({
-      id: carbon.id,
-      name: carbon.fuelName,
-      unit: carbon.unit,
-      class: carbon.class,
-    }).from(carbon);
-
-    console.log(`✅ 成功取得 ${fuels.length} 種燃料`);
-    
-    res.json({
-      success: true,
-      data: fuels,
-      message: `成功取得 ${fuels.length} 種燃料選單`
-    });
-
-  } catch (error) {
-    console.error('❌ 取得燃料選單時發生錯誤:', error);
-    res.status(500).json({
-      success: false,
-      message: '取得燃料選單失敗',
-      error: error instanceof Error ? error.message : '未知錯誤'
-    });
-  }
 });
 
 // 取得class=1的燃料選單（用於燃料燃燒分頁）
@@ -766,23 +735,23 @@ router.get('/my-calculations', authenticateToken, async (req, res) => {
       });
     } else {
       // 原有行為：按天分區處理資料
-      const dailyData = processDailyData(calculations);
+    const dailyData = processDailyData(calculations);
 
-      res.json({
-        success: true,
-        data: {
-          dailyData: dailyData.dailyGroups,
-          totalEmission: dailyData.totalEmission,
-          emissionBreakdown: dailyData.emissionBreakdown,
-          summary: {
-            totalRecords: calculations.length,
-            totalDays: dailyData.dailyGroups.length,
-            averageDailyEmission: dailyData.dailyGroups.length > 0 ? 
-              (dailyData.totalEmission / dailyData.dailyGroups.length).toFixed(2) : 0
-          }
-        },
-        message: `成功取得 ${calculations.length} 筆計算記錄，共 ${dailyData.dailyGroups.length} 天`
-      });
+    res.json({
+      success: true,
+      data: {
+        dailyData: dailyData.dailyGroups,
+        totalEmission: dailyData.totalEmission,
+        emissionBreakdown: dailyData.emissionBreakdown,
+        summary: {
+          totalRecords: calculations.length,
+          totalDays: dailyData.dailyGroups.length,
+          averageDailyEmission: dailyData.dailyGroups.length > 0 ? 
+            (dailyData.totalEmission / dailyData.dailyGroups.length).toFixed(2) : 0
+        }
+      },
+      message: `成功取得 ${calculations.length} 筆計算記錄，共 ${dailyData.dailyGroups.length} 天`
+    });
     }
 
   } catch (error) {
@@ -801,6 +770,8 @@ router.get('/daily-emissions-summary', authenticateToken, requireRole([USER_ROLE
   try {
     const userId = req.user?.id;
     const userRole = req.user?.role;
+    const daysParam = (req.query.days as string) || '';
+    const mode = ((req.query.mode as string) || '').toLowerCase(); // 支援 month / year
 
     if (!userId) {
       return res.status(401).json({
@@ -816,28 +787,114 @@ router.get('/daily-emissions-summary', authenticateToken, requireRole([USER_ROLE
     calculations = await db.select().from(carbonCalculations)
       .orderBy(desc(carbonCalculations.calculationDate), desc(carbonCalculations.createdAt));
 
-    // 按日期分組並計算每日排放加總量
-    const dailyData = processDailyData(calculations);
-    
-    // 計算每日排放加總量
-    const dailyEmissionsSummary = dailyData.dailyGroups.map(day => ({
-      date: day.date,
-      dailyTotalEmission: day.dailyTotalEmission,
-      recordCount: day.recordCount,
-      cumulativeEmission: day.cumulativeEmission
-    }));
+    // 解析 days 參數（7/30/365）
+    const allowedDays = new Set(['7','30','365']);
+    const toLocalDateStr = (d: Date): string => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
 
-    console.log(`✅ 找到 ${dailyEmissionsSummary.length} 天的每日排放加總量`);
+    let rangeStartDateStr: string | null = null;
+    let rangeEndDateStr: string | null = null;
+    if (mode === 'month') {
+      const now = new Date();
+      const first = new Date(now.getFullYear(), now.getMonth(), 1);
+      const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      rangeStartDateStr = toLocalDateStr(first);
+      rangeEndDateStr = toLocalDateStr(last);
+      console.log(`📅 mode=month 範圍 ${rangeStartDateStr} ~ ${rangeEndDateStr}`);
+    } else if (mode === 'year') {
+      const now = new Date();
+      const first = new Date(now.getFullYear(), 0, 1);
+      const last = new Date(now.getFullYear(), 11, 31);
+      rangeStartDateStr = toLocalDateStr(first);
+      rangeEndDateStr = toLocalDateStr(last);
+      console.log(`📅 mode=year 範圍 ${rangeStartDateStr} ~ ${rangeEndDateStr}`);
+    } else if (allowedDays.has(daysParam)) {
+      const days = parseInt(daysParam, 10);
+      const now = new Date();
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const start = new Date(end);
+      start.setDate(end.getDate() - (days - 1));
+      rangeStartDateStr = toLocalDateStr(start);
+      rangeEndDateStr = toLocalDateStr(end);
+      console.log(`📅 days 參數: ${days} 天，範圍 ${rangeStartDateStr} ~ ${rangeEndDateStr}`);
+    }
+
+    // 篩選資料
+    let filtered = calculations;
+    if (rangeStartDateStr && rangeEndDateStr) {
+      filtered = calculations.filter(rec => rec.calculationDate >= rangeStartDateStr! && rec.calculationDate <= rangeEndDateStr!);
+    }
+
+    // 以日期彙總
+    const dailyTotals: { [date: string]: { total: number; count: number } } = {};
+    filtered.forEach((rec: any) => {
+      const date = rec.calculationDate;
+      if (!dailyTotals[date]) dailyTotals[date] = { total: 0, count: 0 };
+      dailyTotals[date].total += rec.totalEmission;
+      dailyTotals[date].count += 1;
+    });
+
+    // 產生完整日期序列
+    const generateDateRangeLocal = (startDate: string, endDate: string) => {
+      const dates: string[] = [];
+      const [sy, sm, sd] = startDate.split('-').map(Number);
+      const [ey, em, ed] = endDate.split('-').map(Number);
+      const start = new Date(sy, sm - 1, sd);
+      const end = new Date(ey, em - 1, ed);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        dates.push(toLocalDateStr(d));
+      }
+      return dates;
+    };
+
+    let finalStart = rangeStartDateStr;
+    let finalEnd = rangeEndDateStr;
+    if (!finalStart || !finalEnd) {
+      const dates = Object.keys(dailyTotals).sort();
+      if (dates.length > 0) {
+        finalStart = dates[0];
+        finalEnd = dates[dates.length - 1];
+      } else {
+        const today = toLocalDateStr(new Date());
+        finalStart = today;
+        finalEnd = today;
+      }
+    }
+
+    const fullDates = generateDateRangeLocal(finalStart!, finalEnd!);
+
+    // 組裝回傳
+    let cumulative = 0;
+    const dailyEmissionsSummary = fullDates.map(date => {
+      const total = dailyTotals[date]?.total || 0;
+      const count = dailyTotals[date]?.count || 0;
+      cumulative += total;
+      const [y, m, d] = date.split('-');
+      const dateLabel = `${parseInt(m)}/${parseInt(d)}`;
+      return {
+        date,
+        dateLabel,
+        dailyTotalEmission: parseFloat(total.toFixed(2)),
+        recordCount: count,
+        cumulativeEmission: parseFloat(cumulative.toFixed(2))
+      };
+    });
+
+    console.log(`✅ 找到 ${dailyEmissionsSummary.length} 天的每日排放加總量（最小~最大: ${finalStart} ~ ${finalEnd}）`);
 
     res.json({
       success: true,
       data: {
-        dailyEmissionsSummary: dailyEmissionsSummary,
+        dailyEmissionsSummary,
         summary: {
           totalDays: dailyEmissionsSummary.length,
-          totalEmission: dailyData.totalEmission,
-          averageDailyEmission: dailyData.dailyGroups.length > 0 ? 
-            parseFloat((dailyData.totalEmission / dailyData.dailyGroups.length).toFixed(2)) : 0
+          totalEmission: parseFloat(dailyEmissionsSummary.reduce((s, d) => s + d.dailyTotalEmission, 0).toFixed(2)),
+          averageDailyEmission: dailyEmissionsSummary.length > 0 ?
+            parseFloat((dailyEmissionsSummary.reduce((s, d) => s + d.dailyTotalEmission, 0) / dailyEmissionsSummary.length).toFixed(2)) : 0
         }
       },
       message: `成功取得 ${dailyEmissionsSummary.length} 天的每日排放加總量`
@@ -853,137 +910,110 @@ router.get('/daily-emissions-summary', authenticateToken, requireRole([USER_ROLE
   }
 });
 
-  // 根據carbonId取得該燃料的每天排放量 (只有主管和老闆能使用)
-  //也就是getEnergyConsumeTrend 能源消耗組成趨勢
-  //路由要輸入http://localhost:3000/api/carbon-calculations/fuel-emissions/"carbonId"
-  //例如：http://localhost:3000/api/carbon-calculations/fuel-emissions/170001
-  router.get('/fuel-emissions/:carbonId', authenticateToken, requireRole([USER_ROLES.MANAGER, USER_ROLES.BOSS]), async (req, res) => {
-    try {
-      const userId = req.user?.id;
-      const userRole = req.user?.role;
-      const { carbonId } = req.params;
-
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: '使用者未認證'
-        });
-      }
-
-      // 驗證carbonId格式
-      if (!carbonId || typeof carbonId !== 'string') {
-        return res.status(400).json({
-          success: false,
-          message: 'carbonId 參數錯誤'
-        });
-      }
-
-      // 主管和老闆可以查看所有員工的記錄
-      console.log(`🔍 ${userRole === USER_ROLES.BOSS ? '老闆' : '主管'} ${userId} 查看 carbonId=${carbonId} 的排放記錄...`);
-      const calculations = await db.select().from(carbonCalculations)
-        .where(eq(carbonCalculations.carbonId, carbonId))
-        .orderBy(desc(carbonCalculations.calculationDate), desc(carbonCalculations.createdAt));
-
-      if (calculations.length === 0) {
-        return res.json({
-          success: true,
-          data: {
-            carbonId: carbonId,
-            fuelName: '未知燃料',
-            dailyEmissions: [],
-            totalEmission: 0,
-            recordCount: 0
-          },
-          message: `未找到 carbonId=${carbonId} 的排放記錄`
-        });
-      }
-
-      // 按日期分組
-      const dailyGroups: { [key: string]: any[] } = {};
-      calculations.forEach(record => {
-        const date = record.calculationDate;
-        if (!dailyGroups[date]) {
-          dailyGroups[date] = [];
-        }
-        dailyGroups[date].push(record);
-      });
-
-      // 計算每日排放量
-      const dailyEmissions = Object.keys(dailyGroups)
-        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime()) // 按日期降序排列
-        .map(date => {
-          const dayRecords = dailyGroups[date];
-          const dailyTotalEmission = dayRecords.reduce((sum: number, record: any) => sum + record.totalEmission, 0);
-          
-          return {
-            date: date,
-            dailyTotalEmission: parseFloat(dailyTotalEmission.toFixed(2)),
-            recordCount: dayRecords.length,
-            records: dayRecords.map((record: any) => ({
-              id: record.id,
-              consumption: record.consumption,
-              unit: record.unit,
-              totalEmission: record.totalEmission,
-              createdAt: record.createdAt
-            }))
-          };
-        });
-
-      // 計算累積排放量（從最早到最晚）
-      let cumulativeEmission = 0;
-      const dailyEmissionsWithCumulative = dailyEmissions
-        .slice()
-        .reverse() // 反轉為從最早到最晚
-        .map(day => {
-          cumulativeEmission += day.dailyTotalEmission;
-          return {
-            ...day,
-            cumulativeEmission: parseFloat(cumulativeEmission.toFixed(2))
-          };
-        })
-        .reverse(); // 再反轉回從最晚到最早
-
-      // 計算總排放量
-      const totalEmission = calculations.reduce((sum: number, record: any) => sum + record.totalEmission, 0);
-      const fuelName = calculations[0].fuelName || '未知燃料';
-
-      console.log(`✅ 找到 ${calculations.length} 筆 carbonId=${carbonId} 的排放記錄`);
-
-      res.json({
-        success: true,
-        data: {
-          carbonId: carbonId,
-          fuelName: fuelName,
-          dailyEmissions: dailyEmissionsWithCumulative,
-          totalEmission: parseFloat(totalEmission.toFixed(2)),
-          recordCount: calculations.length,
-          dateRange: {
-            earliest: dailyEmissionsWithCumulative.length > 0 ? dailyEmissionsWithCumulative[dailyEmissionsWithCumulative.length - 1].date : null,
-            latest: dailyEmissionsWithCumulative.length > 0 ? dailyEmissionsWithCumulative[0].date : null,
-            totalDays: dailyEmissionsWithCumulative.length
-          }
-        },
-        message: `成功取得 carbonId=${carbonId} 的所有每日排放量`
-      });
-
-    } catch (error) {
-      console.error('❌ 取得指定燃料排放記錄時發生錯誤:', error);
-      res.status(500).json({
-        success: false,
-        message: '取得指定燃料排放記錄失敗',
-        error: error instanceof Error ? error.message : '未知錯誤'
-      });
-    }
-  });
-
-  // 根據日期取得該天的所有totalEmission (只有主管和老闆能使用)
-  //也就是carbonEmissionsSource （碳排來源組成 年更換）
-  //可以顯示不同天 有哪些排放種類的圓餅圖
-  router.get('/daily-emissions/:date', authenticateToken, requireRole([USER_ROLES.MANAGER, USER_ROLES.BOSS]), async (req, res) => {
+// 依日期區間回傳碳排來源占比（依 carbonId / fuelName 彙總）
+// GET /api/carbon/emissions-breakdown?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+// 也就是carbonEmissionsSource 
+router.get('/emissions-breakdown', authenticateToken, requireRole([USER_ROLES.MANAGER, USER_ROLES.BOSS]), async (req, res) => {
   try {
     const userId = req.user?.id;
     const userRole = req.user?.role;
-    const { date } = req.params;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: '使用者未認證' });
+    }
+
+    const startDateParam = (req.query.startDate as string) || '';
+    const endDateParam = (req.query.endDate as string) || '';
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+    // 預設為當年度 1/1 ~ 12/31（本地時區）
+    const toLocalDateStr = (d: Date): string => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+    const now = new Date();
+    const defaultStart = toLocalDateStr(new Date(now.getFullYear(), 0, 1));
+    const defaultEnd = toLocalDateStr(new Date(now.getFullYear(), 11, 31));
+
+    let startDate = startDateParam && dateRegex.test(startDateParam) ? startDateParam : defaultStart;
+    let endDate = endDateParam && dateRegex.test(endDateParam) ? endDateParam : defaultEnd;
+
+    if (startDate > endDate) {
+      const tmp = startDate; startDate = endDate; endDate = tmp;
+    }
+
+    console.log(`📊 emissions-breakdown 查詢區間: ${startDate} ~ ${endDate}`);
+
+    // 主管/老闆可看全部
+    const baseQuery = db
+      .select({
+        id: carbonCalculations.id,
+        carbonId: carbonCalculations.carbonId,
+        fuelNameFromCalc: carbonCalculations.fuelName,
+        totalEmission: carbonCalculations.totalEmission,
+        calculationDate: carbonCalculations.calculationDate,
+        fuelName: carbon.fuelName,
+      })
+      .from(carbonCalculations)
+      .innerJoin(carbon, eq(carbonCalculations.carbonId, carbon.id))
+      .where(and(
+        gte(carbonCalculations.calculationDate, startDate),
+        lte(carbonCalculations.calculationDate, endDate)
+      ))
+      .orderBy(desc(carbonCalculations.calculationDate), desc(carbonCalculations.createdAt));
+
+    // 若之後要依部門或人員過濾，可在這裡追加條件
+    const rows = await baseQuery;
+
+    const byFuel: { [carbonId: string]: { fuelName: string; total: number } } = {};
+    let grandTotal = 0;
+    rows.forEach(r => {
+      const key = String(r.carbonId);
+      const name = r.fuelName || r.fuelNameFromCalc || '未知燃料';
+      if (!byFuel[key]) byFuel[key] = { fuelName: name, total: 0 };
+      byFuel[key].total += r.totalEmission;
+      grandTotal += r.totalEmission;
+    });
+
+    const items = Object.keys(byFuel)
+      .map(carbonId => ({
+        carbonId,
+        fuelName: byFuel[carbonId].fuelName,
+        totalEmission: parseFloat(byFuel[carbonId].total.toFixed(2)),
+      }))
+      .sort((a, b) => b.totalEmission - a.totalEmission);
+
+    const withPct = items.map(it => ({
+      ...it,
+      percentage: grandTotal > 0 ? parseFloat(((it.totalEmission / grandTotal) * 100).toFixed(2)) : 0
+    }));
+
+    return res.json({
+      success: true,
+      data: {
+        range: { startDate, endDate },
+        totalEmission: parseFloat(grandTotal.toFixed(2)),
+        breakdown: withPct
+      },
+      message: `成功取得 ${withPct.length} 種燃料來源占比`
+    });
+  } catch (error) {
+    console.error('❌ 取得來源占比失敗:', error);
+    return res.status(500).json({ success: false, message: '取得來源占比失敗', error: error instanceof Error ? error.message : '未知錯誤' });
+  }
+});
+
+
+//根據carbonId取得該燃料的每天排放量 (只有主管和老闆能使用)
+//也就是getEnergyConsumeTrend 能源消耗組成趨勢
+//路由要輸入http://localhost:3000/api/carbon-calculations/fuel-emissions/"carbonId"
+//例如：http://localhost:3000/api/carbon-calculations/fuel-emissions/170001
+router.get('/fuel-emissions/:carbonId', authenticateToken, requireRole([USER_ROLES.MANAGER, USER_ROLES.BOSS]), async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+    const { carbonId } = req.params;
 
     if (!userId) {
       return res.status(401).json({
@@ -992,6 +1022,160 @@ router.get('/daily-emissions-summary', authenticateToken, requireRole([USER_ROLE
       });
     }
 
+    // 驗證carbonId格式
+    if (!carbonId || typeof carbonId !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'carbonId 參數錯誤'
+      });
+    }
+
+    // 主管和老闆可以查看所有員工的記錄
+    console.log(`🔍 ${userRole === USER_ROLES.BOSS ? '老闆' : '主管'} ${userId} 查看 carbonId=${carbonId} 的排放記錄...`);
+    const calculations = await db.select().from(carbonCalculations)
+      .where(eq(carbonCalculations.carbonId, carbonId))
+      .orderBy(desc(carbonCalculations.calculationDate), desc(carbonCalculations.createdAt));
+
+    if (calculations.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          carbonId: carbonId,
+          fuelName: '未知燃料',
+          dailyEmissions: [],
+          totalEmission: 0,
+          recordCount: 0
+        },
+        message: `未找到 carbonId=${carbonId} 的排放記錄`
+      });
+    }
+
+    // 按日期分組
+    const dailyGroups: { [key: string]: any[] } = {};
+    calculations.forEach(record => {
+      const date = record.calculationDate;
+      if (!dailyGroups[date]) {
+        dailyGroups[date] = [];
+      }
+      dailyGroups[date].push(record);
+    });
+
+    // 計算每日排放量
+    const dailyEmissions = Object.keys(dailyGroups)
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime()) // 按日期降序排列
+      .map(date => {
+        const dayRecords = dailyGroups[date];
+        const dailyTotalEmission = dayRecords.reduce((sum: number, record: any) => sum + record.totalEmission, 0);
+        
+        return {
+          date: date,
+          dailyTotalEmission: parseFloat(dailyTotalEmission.toFixed(2)),
+          recordCount: dayRecords.length,
+          records: dayRecords.map((record: any) => ({
+            id: record.id,
+            consumption: record.consumption,
+            unit: record.unit,
+            totalEmission: record.totalEmission,
+            createdAt: record.createdAt
+          }))
+        };
+      });
+
+    // 計算累積排放量（從最早到最晚）
+    let cumulativeEmission = 0;
+    const dailyEmissionsWithCumulative = dailyEmissions
+      .slice()
+      .reverse() // 反轉為從最早到最晚
+      .map(day => {
+        cumulativeEmission += day.dailyTotalEmission;
+        return {
+          ...day,
+          cumulativeEmission: parseFloat(cumulativeEmission.toFixed(2))
+        };
+      })
+      .reverse(); // 再反轉回從最晚到最早
+
+    // 計算總排放量
+    const totalEmission = calculations.reduce((sum: number, record: any) => sum + record.totalEmission, 0);
+    const fuelName = calculations[0].fuelName || '未知燃料';
+
+    console.log(`✅ 找到 ${calculations.length} 筆 carbonId=${carbonId} 的排放記錄`);
+
+    res.json({
+      success: true,
+      data: {
+        carbonId: carbonId,
+        fuelName: fuelName,
+        dailyEmissions: dailyEmissionsWithCumulative,
+        totalEmission: parseFloat(totalEmission.toFixed(2)),
+        recordCount: calculations.length,
+        dateRange: {
+          earliest: dailyEmissionsWithCumulative.length > 0 ? dailyEmissionsWithCumulative[dailyEmissionsWithCumulative.length - 1].date : null,
+          latest: dailyEmissionsWithCumulative.length > 0 ? dailyEmissionsWithCumulative[0].date : null,
+          totalDays: dailyEmissionsWithCumulative.length
+        }
+      },
+      message: `成功取得 carbonId=${carbonId} 的所有每日排放量`
+    });
+
+  } catch (error) {
+    console.error('❌ 取得指定燃料排放記錄時發生錯誤:', error);
+    res.status(500).json({
+      success: false,
+      message: '取得指定燃料排放記錄失敗',
+      error: error instanceof Error ? error.message : '未知錯誤'
+    });
+  }
+});
+
+
+// 取得所有可用的燃料選單
+//也就是使用者選擇要記錄的燃料的選單
+router.get('/fuels', async (_req, res) => {
+  try {
+    console.log('🔍 取得燃料選單...');
+    
+    const fuels = await db.select({
+      id: carbon.id,
+      name: carbon.fuelName,
+      unit: carbon.unit,
+      class: carbon.class,
+    }).from(carbon);
+
+    console.log(`✅ 成功取得 ${fuels.length} 種燃料`);
+    
+    res.json({
+      success: true,
+      data: fuels,
+      message: `成功取得 ${fuels.length} 種燃料選單`
+    });
+
+  } catch (error) {
+    console.error('❌ 取得燃料選單時發生錯誤:', error);
+    res.status(500).json({
+      success: false,
+      message: '取得燃料選單失敗',
+      error: error instanceof Error ? error.message : '未知錯誤'
+    });
+  }
+});
+
+// 根據日期取得該天的所有totalEmission (只有主管和老闆能使用)
+//也就是carbonEmissionsSource （碳排來源組成 年更換）
+//可以顯示不同天 有哪些排放種類的圓餅圖
+router.get('/daily-emissions/:date', authenticateToken, requireRole([USER_ROLES.MANAGER, USER_ROLES.BOSS]), async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+    const { date } = req.params;
+  
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: '使用者未認證'
+      });
+    }
+  
     // 驗證日期格式 (YYYY-MM-DD)
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(date)) {
@@ -1000,17 +1184,17 @@ router.get('/daily-emissions-summary', authenticateToken, requireRole([USER_ROLE
         message: '日期格式錯誤，請使用 YYYY-MM-DD 格式'
       });
     }
-
+  
     // 主管和老闆可以查看所有員工的記錄
     console.log(`🔍 ${userRole === USER_ROLES.BOSS ? '老闆' : '主管'} ${userId} 查看 ${date} 的所有排放記錄...`);
     const calculations = await db.select().from(carbonCalculations)
       .where(eq(carbonCalculations.calculationDate, date))
       .orderBy(desc(carbonCalculations.createdAt));
-
+  
     // 計算該日的統計資訊
     const dailyTotalEmission = calculations.reduce((sum: number, record: any) => sum + record.totalEmission, 0);
     const emissionBreakdown = calculateEmissionBreakdown(calculations);
-
+  
     // 計算不同fuelName的碳排
     const fuelEmissionBreakdown: { [key: string]: number } = {};
     calculations.forEach((record: any) => {
@@ -1020,16 +1204,16 @@ router.get('/daily-emissions-summary', authenticateToken, requireRole([USER_ROLE
       }
       fuelEmissionBreakdown[fuelName] += record.totalEmission;
     });
-
+  
     // 格式化fuelName排放數據
     const fuelEmissions = Object.keys(fuelEmissionBreakdown).map(fuelName => ({
       fuelName: fuelName,
       totalEmission: parseFloat(fuelEmissionBreakdown[fuelName].toFixed(2)),
       percentage: parseFloat(((fuelEmissionBreakdown[fuelName] / dailyTotalEmission) * 100).toFixed(2))
     }));
-
+  
     console.log(`✅ 找到 ${calculations.length} 筆 ${date} 的排放記錄`);
-
+  
     res.json({
       success: true,
       data: {
@@ -1040,7 +1224,7 @@ router.get('/daily-emissions-summary', authenticateToken, requireRole([USER_ROLE
       },
       message: `成功取得 ${date} 的排放總量`
     });
-
+  
   } catch (error) {
     console.error('❌ 取得指定日期排放記錄時發生錯誤:', error);
     res.status(500).json({
@@ -1049,6 +1233,5 @@ router.get('/daily-emissions-summary', authenticateToken, requireRole([USER_ROLE
       error: error instanceof Error ? error.message : '未知錯誤'
     });
   }
-});
-
+  });
 export default router;

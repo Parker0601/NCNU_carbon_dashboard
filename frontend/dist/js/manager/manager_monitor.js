@@ -7,7 +7,7 @@ const API_ROOT = document.getElementById('app-config')?.dataset?.apiRoot || 'htt
 const ROUTES = {
   assignSnapshot: `${API_ROOT}/schedule/assign-human-resource`,
   // 主管分派：一次更新 Device / Schedule / MaintainRecord
-  assign:        `${API_ROOT}/devices/assign`,
+  assign:        `${API_ROOT}/schedule/assign-human-resource`,
 };
 
 // 3) 共用 fetch（帶 JWT）
@@ -42,6 +42,8 @@ async function apiFetch(url, { method = 'GET', body, headers = {} } = {}) {
 // ======================== Model（右側人員資料） ========================
 const staffModel = []; // [{id,name,status:'idle'|'busy', task?:string}, ...]
 
+// ★ 新增：依 deviceId 快取 issue 描述（員工回報）
+const issueByDevice = new Map(); // deviceId -> { id: issueId, desc: string }
 
 // 新增：一次載入「故障清單 + 人員清單 + 問題清單」
 async function loadSnapshot() {
@@ -67,10 +69,16 @@ async function loadSnapshot() {
       task: '-' // 你的 existingIssues 目前沒有「受指派者」欄位，先留空
     });
   });
-
-  // 如果你想用 existingIssues 做別的顯示，也可在這裡接 data.existingIssues
+// ★ 新增：把「待處理中的 issue」快取為 deviceId -> issue
+  const issues = data?.existingIssues ?? [];
+  issueByDevice.clear();
+  issues.forEach(it => {
+    // 這裡拿「狀態=1:待處理」的描述；如果你要拿處理中/最新一筆，自行調整條件
+    issueByDevice.set(it.deviceId, { id: it.issueId, desc: it.description || '' });
+  });
+  // 方便在 F12 直接看整包
+  window.__snapshot = data;
 }
-
 
 function renderAlertList(list) {
   if (!Array.isArray(list) || !list.length) {
@@ -153,7 +161,17 @@ function renderStaffTable() {
   $('#tbl-staff tbody').html(rows || '<tr><td colspan="3" class="text-center text-muted">目前沒有人員資料</td></tr>');
 }
 
-
+// ======================== 小工具：HTML escape（防止文字中含 < > 或 & 出錯） ========================
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[ch]));
+}
 // ======================== 指派：Swal 表單 + 呼叫後端 ========================
 async function openAssignDialog(device) {
   // 將人員分組（空閒/執行中）
@@ -163,6 +181,10 @@ async function openAssignDialog(device) {
   const idleOptions = idle.map(s => `<option value="${s.id}">${s.name}（空閒）</option>`).join('');
   const busyOptions = busy.map(s => `<option value="${s.id}" disabled>${s.name}（執行中）</option>`).join('');
 
+   // ★ 從快取取得該機台的 issue 描述（員工回報）
+ const issue = issueByDevice.get(device.id);
+ const issueText = esc(issue?.desc || '(無回報描述)');
+ const issueId = issue?.id || null;
   await Swal.fire({
     title: `指派處理：${device.name}`,
     html: `
@@ -175,7 +197,12 @@ async function openAssignDialog(device) {
         <small class="form-text text-muted">建議優先指派「空閒」人員</small>
       </div>
       <div class="form-group text-left">
-        <label>說明 / 指示</label>
+       <label>問題描述（員工回報）</label>
+       <textarea class="form-control" rows="3" readonly>${issueText}</textarea>
+       <small class="form-text text-muted">來源：issues 資料表</small>
+      </div>
+      <div class="form-group text-left">
+        <label>主管指示 / 備註</label>
         <textarea id="assign-desc" class="form-control" rows="3" placeholder="請填寫維護重點、備註等"></textarea>
       </div>
       <div class="form-group text-left">
@@ -195,30 +222,23 @@ async function openAssignDialog(device) {
       if (!staffId) return Swal.showValidationMessage('請選擇指派人員');
       // 轉 ISO（datetime-local 沒有時區，視為本地時間）
       const eta = etaRaw ? new Date(etaRaw.replace(' ', 'T')).toISOString() : null;
-      return { staffId, desc, eta };
+      return { staffId, desc, eta, issueId };
     }
   }).then(async (ret) => {
     if (!ret.isConfirmed) return;
 
-    const { staffId, desc, eta } = ret.value;
+    const { staffId, desc, eta, issueId } = ret.value;
 
     // 後端一次處理：Device / Schedule / MaintainRecord
-    const payload = {
-      deviceId: device.id,
-      staffId,
-      description: desc,
-      eta,                      // 主管設定的截止 (ISO string 或 null)
-      nextDeviceStatus: 2,      // 分派後進入維護中
-      schedule: {
-        startTime: 'now',       // 用 'now' 提示後端以伺服器時間寫入
-        endTime: 'eta',         // 表示使用上方 eta
-        status: '維護中'
-      },
-      maintainRecord: {
-        startTime: 'now',
-        endTime: null
-      }
-    };
+    if (!issueId) {
+           await Swal.fire('無法指派', '找不到該設備對應的問題(issue)。請確認 existingIssues 是否包含此 device。', 'warning');
+           return;
+         }
+         const payload = {
+           issueId,                 // 從 issueByDevice 快取來的 issueId
+           assignerId: staffId,     // 你後端欄位叫 assignerId（實際是「被指派員工」）
+           endTime: eta || undefined
+         };
 
     try {
       await apiFetch(ROUTES.assign, { method: 'POST', body: payload });

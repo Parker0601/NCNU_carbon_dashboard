@@ -61,7 +61,7 @@ export const maintenanceRecords = pgTable('maintenance_records', {
   employeeDescription: text('employee_description'),
   bossDescription: text('boss_description'),
   createTime: timestamp('create_time').notNull(),
-  endTime: timestamp('end_time').notNull(),
+  endTime: timestamp('end_time'),
 });
 
 // schedule table

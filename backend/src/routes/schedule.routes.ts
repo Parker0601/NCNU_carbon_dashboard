@@ -49,7 +49,7 @@ router.use(requireUser);
 // 驗證 schema
 const assignHumanResourceSchema = z.object({
   issueId: z.number().int().positive(),
-  assignerId: z.number().int().positive(),
+  userId: z.number().int().positive(),
   endTime: z.string().datetime().optional()
 });
 
@@ -127,7 +127,7 @@ router.get('/assign-human-resource', requireAdmin, async (_req: Request, res: Re
  * 
  * 請求參數 (Body):
  * - issueId: 問題 ID
- * - assignerId: 被指派的員工 ID
+ * - userId: 被指派的員工 ID
  * 
  * 執行動作：
  * 1. 更新 issue 的 assigner 和 status (改為 '2' 處理中)
@@ -142,71 +142,99 @@ router.post('/assign-human-resource', requireAdmin, async (req: Request, res: Re
       return errorResponse(res, 'User not authenticated', 401);
     }
 
-  const { issueId, assignerId, endTime } = assignHumanResourceSchema.parse(req.body);
+    const { issueId, userId, endTime } = assignHumanResourceSchema.parse(req.body);
 
-    // 檢查問題是否存在
-    const [existingIssue] = await db
-      .select()
-      .from(issues)
-      .where(eq(issues.id, issueId));
+    const result = await db.transaction(async (tx) => {
+      // 檢查問題是否存在
+      const [existingIssue] = await tx
+        .select()
+        .from(issues)
+        .where(eq(issues.id, issueId));
 
-    if (!existingIssue) {
-      return notFoundResponse(res, 'Issue not found');
-    }
+      if (!existingIssue) {
+        throw Object.assign(new Error('Issue not found'), { statusCode: 404 });
+      }
 
-    // 檢查指派員工是否存在且為一般員工
-    const [assignee] = await db
-      .select()
-      .from(users)
-      .where(and(eq(users.id, assignerId), eq(users.role, '1')));
+      // 檢查指派員工是否存在且為一般員工
+      const [assignee] = await tx
+        .select()
+        .from(users)
+        .where(and(eq(users.id, userId), eq(users.role, '1')));
 
-    if (!assignee) {
-      return errorResponse(res, 'Invalid assignee or user is not a staff member', 400);
-    }
+      if (!assignee) {
+        throw Object.assign(new Error('Invalid assignee or user is not a staff member'), { statusCode: 400 });
+      }
 
-    // 更新問題的 assigner
-    const [updatedIssue] = await db
-      .update(issues)
-      .set({
-        assigner: assignerId,
-        status: '2' // 2: 處理中
-      })
-      .where(eq(issues.id, issueId))
-      .returning();
+      // 更新問題的 assigner
+      const [updatedIssue] = await tx
+        .update(issues)
+        .set({
+          assigner: userId,
+          status: '2' // 2: 處理中
+        })
+        .where(eq(issues.id, issueId))
+        .returning();
 
-    // 更新員工狀態為忙碌
-    await db
-      .update(users)
-      .set({ status: 'busy' })
-      .where(eq(users.id, assignerId));
+      // 更新員工狀態為忙碌
+      await tx
+        .update(users)
+        .set({ status: 'busy' })
+        .where(eq(users.id, userId));
 
-    // 創建 schedule 記錄
-    const [newSchedule] = await db
-      .insert(schedule)
-      .values({
-        userId: assignerId,
-        deviceId: existingIssue.deviceId,
-        title: `維修任務 - ${existingIssue.description}`,
-        description: `指派處理設備問題: ${existingIssue.description}`,
-        date: new Date().toISOString().split('T')[0],
-        startTime: new Date(),
-        endTime: endTime ? new Date(endTime) : null,
-        status: 'assigned'
-      })
-      .returning();
+      // 創建 schedule 記錄
+      const [newSchedule] = await tx
+        .insert(schedule)
+        .values({
+          userId: userId,
+          deviceId: existingIssue.deviceId,
+          title: `維修任務 - ${existingIssue.description}`,
+          description: `指派處理設備問題: ${existingIssue.description}`,
+          date: new Date().toISOString().split('T')[0],
+          startTime: new Date(),
+          endTime: endTime ? new Date(endTime) : null,
+          status: 'assigned'
+        })
+        .returning();
 
-    return successResponse(res, {
-      issueId: updatedIssue.id,
-      assignerId: updatedIssue.assigner,
-      status: updatedIssue.status,
-      scheduleId: newSchedule.id,
-      message: 'Staff member assigned successfully'
-    }, 'Staff member assigned to issue successfully', 201);
-  } catch (error) {
+      // 在指派時建立對應的維修記錄（先寫入 user_id 與 create_time，其他欄位之後補）
+      // 若已存在未結束的紀錄則不重複建立
+      const [pendingMaintenance] = await tx
+        .select({ id: maintenanceRecords.id })
+        .from(maintenanceRecords)
+        .where(and(
+          eq(maintenanceRecords.issueId, issueId),
+          eq(maintenanceRecords.userId, userId),
+          sql`${maintenanceRecords.endTime} IS NULL`
+        ))
+        .limit(1);
+
+      if (!pendingMaintenance) {
+        await tx
+          .insert(maintenanceRecords)
+          .values({
+            issueId,
+            userId: userId,
+            createTime: new Date()
+          });
+      }
+
+      return {
+        issueId: updatedIssue.id,
+        assignerId: updatedIssue.assigner,
+        status: updatedIssue.status,
+        scheduleId: newSchedule.id,
+      };
+    });
+
+    return successResponse(res, { ...result, message: 'Staff member assigned successfully' }, 'Staff member assigned to issue successfully', 201);
+  } catch (error: any) {
     if (error instanceof z.ZodError) {
       return errorResponse(res, error.issues.map(i => i.message).join('; '), 400);
     }
-    return errorResponse(res, 'Failed to assign staff member', 500);
+    // 紀錄詳細錯誤以利排查
+    console.error('assign-human-resource error:', error?.message || error, error?.stack);
+    const status = typeof error?.statusCode === 'number' ? error.statusCode : 500;
+    return errorResponse(res, 'Failed to assign staff member', status, error?.message);
   }
 });
 
@@ -387,17 +415,24 @@ router.post('/maintenance', async (req: Request, res: Response) => {
       return errorResponse(res, 'No assigned issue found for this device', 400);
     }
 
-    // 創建維修記錄
-    const [newMaintenance] = await db
-      .insert(maintenanceRecords)
-      .values({
-        issueId: existingIssue.id,
-        userId: req.user.id,
+    // 更新既有的維修記錄（在指派時建立），補上員工描述與結束時間
+    const [updatedMaintenance] = await db
+      .update(maintenanceRecords)
+      .set({
         employeeDescription: employee_description,
-        createTime: new Date(),
         endTime: new Date(endTime)
       })
+      .where(and(
+        eq(maintenanceRecords.issueId, existingIssue.id),
+        eq(maintenanceRecords.userId, req.user.id),
+        // 僅更新尚未結束的那一筆
+        sql`${maintenanceRecords.endTime} IS NULL`
+      ))
       .returning();
+
+    if (!updatedMaintenance) {
+      return errorResponse(res, 'No pending maintenance record to update', 400);
+    }
 
     // 不更新 issue 狀態，等主管審核通過後才更新
 
@@ -417,13 +452,13 @@ router.post('/maintenance', async (req: Request, res: Response) => {
       .where(and(eq(schedule.userId, req.user.id), eq(schedule.deviceId, deviceId)));
 
     return successResponse(res, {
-      maintenanceId: newMaintenance.id,
+      maintenanceId: updatedMaintenance.id,
       deviceId,
-      employeeDescription: newMaintenance.employeeDescription,
-      createTime: newMaintenance.createTime,
-      endTime: newMaintenance.endTime,
-      message: 'Maintenance record created successfully'
-    }, 'Maintenance record created successfully', 201);
+      employeeDescription: updatedMaintenance.employeeDescription,
+      createTime: updatedMaintenance.createTime,
+      endTime: updatedMaintenance.endTime,
+      message: 'Maintenance record updated successfully'
+    }, 'Maintenance record updated successfully', 200);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return errorResponse(res, error.issues.map(i => i.message).join('; '), 400);

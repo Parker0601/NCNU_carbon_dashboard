@@ -43,7 +43,7 @@ async function apiFetch(url, { method = 'GET', body, headers = {} } = {}) {
 const staffModel = []; // [{id,name,status:'idle'|'busy', task?:string}, ...]
 
 // ★ 新增：依 deviceId 快取 issue 描述（員工回報）
-const issueByDevice = new Map(); // deviceId -> { id: issueId, desc: string }
+const issuesByDevice = new Map();// deviceId -> { id: issueId, desc: string }
 
 // 新增：一次載入「故障清單 + 人員清單 + 問題清單」
 async function loadSnapshot() {
@@ -70,14 +70,18 @@ async function loadSnapshot() {
     });
   });
 // ★ 新增：把「待處理中的 issue」快取為 deviceId -> issue
-  const issues = data?.existingIssues ?? [];
-  issueByDevice.clear();
-  issues.forEach(it => {
-    // 這裡拿「狀態=1:待處理」的描述；如果你要拿處理中/最新一筆，自行調整條件
-    issueByDevice.set(it.deviceId, { id: it.issueId, desc: it.description || '' });
+const issues = data?.existingIssues ?? [];
+issuesByDevice.clear();
+issues.forEach(it => {
+  const list = issuesByDevice.get(it.deviceId) || [];
+  list.push({
+    id: it.issueId,
+    desc: it.description || '',
+    status: String(it.status || ''),
+    createTime: it.createTime || null
   });
-  // 方便在 F12 直接看整包
-  window.__snapshot = data;
+  issuesByDevice.set(it.deviceId, list);
+});
 }
 
 function renderAlertList(list) {
@@ -174,83 +178,91 @@ function esc(str) {
 }
 // ======================== 指派：Swal 表單 + 呼叫後端 ========================
 async function openAssignDialog(device) {
-  // 將人員分組（空閒/執行中）
   const idle = staffModel.filter(s => s.status === 'idle');
-  const busy = staffModel.filter(s => s.status === 'busy');
+  const busy  = staffModel.filter(s => s.status === 'busy');
 
   const idleOptions = idle.map(s => `<option value="${s.id}">${s.name}（空閒）</option>`).join('');
   const busyOptions = busy.map(s => `<option value="${s.id}" disabled>${s.name}（執行中）</option>`).join('');
 
-   // ★ 從快取取得該機台的 issue 描述（員工回報）
- const issue = issueByDevice.get(device.id);
- const issueText = esc(issue?.desc || '(無回報描述)');
- const issueId = issue?.id || null;
-  await Swal.fire({
-    title: `指派處理：${device.name}`,
-    html: `
-      <div class="form-group text-left">
-        <label>指派人員</label>
-        <select id="assign-staff" class="form-control">
-          <optgroup label="空閒">${idleOptions || '<option disabled>目前沒有空閒人員</option>'}</optgroup>
-          <optgroup label="執行中">${busyOptions || '<option disabled>—</option>'}</optgroup>
-        </select>
-        <small class="form-text text-muted">建議優先指派「空閒」人員</small>
-      </div>
-      <div class="form-group text-left">
-       <label>問題描述（員工回報）</label>
-       <textarea class="form-control" rows="3" readonly>${issueText}</textarea>
-       <small class="form-text text-muted">來源：issues 資料表</small>
-      </div>
-      <div class="form-group text-left">
-        <label>主管指示 / 備註</label>
-        <textarea id="assign-desc" class="form-control" rows="3" placeholder="請填寫維護重點、備註等"></textarea>
-      </div>
-      <div class="form-group text-left">
-        <label>截止日期 (ETA)</label>
-        <input type="datetime-local" id="assign-eta" class="form-control" />
-        <small class="form-text text-muted">不填代表暫無明確截止</small>
-      </div>
-    `,
-    focusConfirm: false,
-    showCancelButton: true,
-    confirmButtonText: '確認指派',
-    cancelButtonText: '取消',
-    preConfirm: () => {
-      const staffId = Number(document.getElementById('assign-staff')?.value);
-      const desc = (document.getElementById('assign-desc')?.value || '').trim();
-      const etaRaw = document.getElementById('assign-eta')?.value || '';
-      if (!staffId) return Swal.showValidationMessage('請選擇指派人員');
-      // 轉 ISO（datetime-local 沒有時區，視為本地時間）
-      const eta = etaRaw ? new Date(etaRaw.replace(' ', 'T')).toISOString() : null;
-      return { staffId, desc, eta, issueId };
-    }
-  }).then(async (ret) => {
+  // 🔧取得該設備的 issues（可能 0~多筆）
+  const issueList = issuesByDevice.get(device.id) || [];
+  const makeIssueLabel = (it) => {
+    const txt = esc(it.desc);
+    const short = txt.length > 30 ? txt.slice(0, 30) + '…' : txt;
+    return short;               // 🔴 不再回傳 "#${it.id} ..."
+  };
+  const issueOptions = issueList.length
+    ? issueList.map(it => `<option value="${it.id}">${makeIssueLabel(it)}</option>`).join('')
+    : '<option value="" disabled>（找不到此設備的問題）</option>';
+
+    const ret = await Swal.fire({
+      title: `指派處理：${device.name}`,
+      html: `
+        <div class="form-group text-left">
+          <label>選擇問題（員工回報）</label>
+          <select id="assign-issue" class="form-control">
+            ${issueOptions}
+          </select>
+          <small class="form-text text-muted">可從多個回報中選擇要先處理的那一筆</small>
+        </div>
+    
+        <div class="form-group text-left">
+          <label>指派人員</label>
+          <select id="assign-staff" class="form-control">
+            <optgroup label="空閒">${idleOptions || '<option disabled>目前沒有空閒人員</option>'}</optgroup>
+            <optgroup label="執行中">${busyOptions || '<option disabled>—</option>'}</optgroup>
+          </select>
+          <small class="form-text text-muted">建議優先指派「空閒」人員</small>
+        </div>
+    
+        <div class="form-group text-left">
+          <label>主管指示 / 備註</label>
+          <textarea id="assign-desc" class="form-control" rows="3" placeholder="請填寫維護重點、備註等"></textarea>
+        </div>
+    
+        <div class="form-group text-left">
+          <label>截止日期 (ETA)</label>
+          <input type="datetime-local" id="assign-eta" class="form-control" />
+          <small class="form-text text-muted">不填代表暫無明確截止</small>
+        </div>
+      `,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: '確認指派',
+      cancelButtonText: '取消',
+      // 🔴 刪掉 didOpen
+      preConfirm: () => {
+        const issueId = Number(document.getElementById('assign-issue')?.value || 0);
+        const staffId = Number(document.getElementById('assign-staff')?.value || 0);
+        const desc = (document.getElementById('assign-desc')?.value || '').trim();
+        const etaRaw = document.getElementById('assign-eta')?.value || '';
+    
+        if (!issueId) return Swal.showValidationMessage('請選擇要處理的問題');
+        if (!staffId) return Swal.showValidationMessage('請選擇指派人員');
+    
+        const eta = etaRaw ? new Date(etaRaw.replace(' ', 'T')).toISOString() : null;
+        return { issueId, staffId, desc, eta };
+      }
+    });
     if (!ret.isConfirmed) return;
+    const { issueId, staffId, eta } = ret.value;
 
-    const { staffId, desc, eta, issueId } = ret.value;
-
-    // 後端一次處理：Device / Schedule / MaintainRecord
-    if (!issueId) {
-           await Swal.fire('無法指派', '找不到該設備對應的問題(issue)。請確認 existingIssues 是否包含此 device。', 'warning');
-           return;
-         }
-         const payload = {
-           issueId,                 // 從 issueByDevice 快取來的 issueId
-           assignerId: staffId,     // 你後端欄位叫 assignerId（實際是「被指派員工」）
-           endTime: eta || undefined
-         };
+    // 🔧這裡修正 payload 欄位名：userId（不是 assignerId）
+    const payload = {
+      issueId,
+      userId: staffId,
+      endTime: eta || undefined
+    };
 
     try {
       await apiFetch(ROUTES.assign, { method: 'POST', body: payload });
       await Swal.fire('已指派', '已同步更新裝置/排程/維護紀錄', 'success');
-
-      // 成功後刷新左右資料
       await loadSnapshot();
       renderStaffTable();
     } catch (e) {
       Swal.fire('指派失敗', e.message || '請稍後再試', 'error');
     }
-  });
+  
 }
 
 

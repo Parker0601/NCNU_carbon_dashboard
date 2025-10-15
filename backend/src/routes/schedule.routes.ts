@@ -33,7 +33,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, or, desc, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { devices, issues, users, schedule, maintenanceRecords } from '@/db/schema';
 import { authenticateToken, requireUser, requireAdmin } from '@/middleware/auth';
@@ -79,7 +79,7 @@ router.get('/assign-human-resource', requireAdmin, async (_req: Request, res: Re
         ratio: devices.ratio
       })
       .from(devices)
-      .where(eq(devices.status, '3')); // 3: 故障
+      .where(or(eq(devices.status, '3'), eq(devices.status, '2')));
 
     // 2. 獲取所有員工 (role = '1') 及其狀態
     const availableStaff = await db
@@ -347,6 +347,25 @@ router.patch('/accept-task/:scheduleId', async (req: Request, res: Response) => 
       .set({ status: 'accepted' })
       .where(eq(schedule.id, scheduleId))
       .returning();
+
+    // 取得剛才更新到的 schedule（內含 deviceId, userId）
+    const deviceId = updatedSchedule.deviceId!;
+
+// 把設備狀態改成維護中 (2)
+    await db.update(devices)
+      .set({ status: '2' })
+      .where(eq(devices.id, deviceId));
+
+// 把該員工在該設備的「待處理」issue 改為「處理中」
+// （如果你一台設備只有一筆 active issue，也可以不加 assigner 條件）
+    await db.update(issues)
+      .set({ status: '2' })
+      .where(and(
+        eq(issues.deviceId, deviceId),
+        eq(issues.assigner, updatedSchedule.userId),
+        eq(issues.status, '1') // 待處理 → 處理中
+      ));
+
 
     return successResponse(res, {
       scheduleId: updatedSchedule.id,

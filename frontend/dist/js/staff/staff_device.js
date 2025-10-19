@@ -1,6 +1,7 @@
 (() => {
   // ========= 基本設定 =========
   const API_BASE = 'http://localhost:3000/api/devices';
+  const SCHEDULE_API_BASE = 'http://localhost:3000/api/schedule';
   const TOKEN_KEY = ['authToken', 'access_token', 'token']; // 你系統存 token 的 key，若不同請改這裡
 
   // ========= 小工具 =========
@@ -53,12 +54,18 @@
   // ========= DOM 參考 =========
   const $deviceView   = document.getElementById('device-view');
   const $reportView   = document.getElementById('report-view');
+  const $maintenanceHistoryView = document.getElementById('maintenance-history-view');
   const $deviceList   = document.getElementById('device-list');
   const $btnDevice    = document.getElementById('btn-device-view');
   const $btnReport    = document.getElementById('btn-report-view');
+  const $btnMaintenanceHistory = document.getElementById('btn-maintenance-history');
   const $btnRefresh   = document.getElementById('btn-refresh');
   const $reportSel    = document.getElementById('report-selector');
   const $reportBox    = document.getElementById('report-container');
+  
+  // 維護紀錄相關 DOM
+  const $maintenanceDeviceSelector = document.getElementById('maintenance-device-selector');
+  const $maintenanceHistoryTable = document.getElementById('maintenance-history-table');
 
   // Modal 元件
   const $maintenanceModal = document.getElementById('maintenanceModal');
@@ -122,6 +129,63 @@
     }
   };
 
+  // ========= 維護紀錄功能 =========
+  const loadMaintenanceHistory = async (deviceId = null) => {
+    try {
+      const url = deviceId ? 
+        `${SCHEDULE_API_BASE}/maintenance-history?deviceId=${deviceId}` : 
+        `${SCHEDULE_API_BASE}/maintenance-history`;
+      
+      const resp = await apiFetch(url, { method: 'GET' });
+      renderMaintenanceHistoryTable(resp.data || []);
+    } catch (err) {
+      toastError(`載入維護紀錄失敗：${err.message}`);
+    }
+  };
+
+  const renderMaintenanceHistoryTable = (records) => {
+    const tbody = $maintenanceHistoryTable.querySelector('tbody');
+    if (!records || records.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">目前沒有維護紀錄</td></tr>';
+      return;
+    }
+
+    const rows = records.map(record => {
+      const startTime = fmtDateTime(record.createTime);
+      const endTime = record.endTime ? fmtDateTime(record.endTime) : '—';
+      const bossDescription = record.bossDescription || '—';
+      
+      return `
+        <tr>
+          <td>${record.deviceName || '—'}</td>
+          <td>${record.userName || '—'}</td>
+          <td>${record.employeeDescription || '—'}</td>
+          <td>${startTime}</td>
+          <td>${endTime}</td>
+          <td>${bossDescription}</td>
+        </tr>
+      `;
+    }).join('');
+
+    tbody.innerHTML = rows;
+  };
+
+  const loadDeviceSelector = async () => {
+    try {
+      const resp = await apiFetch(`${API_BASE}/status`, { method: 'GET' });
+      const devices = resp.data || [];
+      
+      const options = devices.map(device => 
+        `<option value="${device.id}">${device.name || `設備#${device.id}`}</option>`
+      ).join('');
+      
+      $maintenanceDeviceSelector.innerHTML = 
+        '<option value="">選擇設備查看維護紀錄</option>' + options;
+    } catch (err) {
+      toastError(`載入設備清單失敗：${err.message}`);
+    }
+  };
+
   // ========= 維護歷史 =========
   const showDeviceMaintenanceHistory = async (deviceId, deviceName) => {
     try {
@@ -180,38 +244,56 @@
     }
   };
 
+  /**
+   * 提交維護記錄到後端 API
+   * 這個函數處理維護表單的提交，包括資料驗證、API 呼叫和 UI 更新
+   */
   const submitMaintenance = async () => {
     try {
+      // ========= 1. 檢查是否有選定的設備 =========
+      // 確保在開啟維護 Modal 時有設定 currentDeviceForMaintenance
       if (!currentDeviceForMaintenance) {
         toastError('沒有選定設備。');
         return;
       }
-      const deviceId = currentDeviceForMaintenance.id;
-      const name = currentDeviceForMaintenance.name || `設備 ${deviceId}`;
-      const type = $maintenanceType.value;
-      const desc = $maintenanceDesc.value.trim();
-      const endTimeLocal = $maintenanceTime.value;
 
+      // ========= 2. 取得表單資料 =========
+      const deviceId = currentDeviceForMaintenance.id;           // 設備 ID
+      const name = currentDeviceForMaintenance.name || `設備 ${deviceId}`; // 設備名稱，若無則使用預設格式
+      const type = $maintenanceType.value;                      // 維護類型（下拉選單）
+      const desc = $maintenanceDesc.value.trim();               // 維護描述（文字區域）
+      const endTimeLocal = $maintenanceTime.value;              // 維護結束時間（日期時間選擇器）
+
+      // ========= 3. 表單驗證 =========
+      // 檢查必填欄位是否都有填寫
       if (!type) return toastError('請選擇維護類型');
       if (!desc) return toastError('請填寫維護描述');
       if (!endTimeLocal) return toastError('請選擇維護時間');
 
-      // 把「維護類型」合併到描述（API 只有 description 欄位）
+      // ========= 4. 資料處理 =========
+      // 將維護類型和描述合併成一個字串，因為後端 API 只有 description 欄位
+      // 格式：[維護類型] 維護描述
       const finalDesc = `[${type}] ${desc}`;
 
+      // ========= 5. 組裝 API 請求的 payload =========
       const payload = {
-        deviceId: Number(deviceId),
-        name,
-        description: finalDesc,
-        endTime: new Date(endTimeLocal).toISOString(),
+        deviceId: Number(deviceId),                    // 轉換為數字類型
+        name,                                          // 設備名稱
+        description: finalDesc,                        // 合併後的維護描述
+        endTime: new Date(endTimeLocal).toISOString(), // 將本地時間轉換為 ISO 格式
       };
 
+      // ========= 6. 呼叫後端 API =========
+      // POST 請求到 /api/devices/maintenance 端點
       const resp = await apiFetch(`${API_BASE}/maintenance`, {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload),  // 將 payload 轉換為 JSON 字串
       });
 
-      // 關閉 modal
+      // ========= 7. 關閉維護 Modal =========
+      // 支援兩種方式關閉 Modal：
+      // 1. 如果有 jQuery，使用 Bootstrap Modal 的 hide 方法
+      // 2. 如果沒有 jQuery，直接操作 DOM 元素
       if (window.$) {
         $('#maintenanceModal').modal('hide');
       } else {
@@ -219,10 +301,17 @@
         $maintenanceModal.style.display = 'none';
       }
 
+      // ========= 8. 顯示成功訊息 =========
+      // 使用後端回傳的訊息，若無則使用預設訊息
       toastSuccess(resp.message || '維護紀錄已建立');
-      // 重新載入設備狀態（維護可能會影響狀態）
+
+      // ========= 9. 重新載入設備狀態 =========
+      // 因為維護可能會影響設備狀態，所以需要重新載入設備列表
       loadDeviceStatus();
+
     } catch (err) {
+      // ========= 錯誤處理 =========
+      // 如果 API 呼叫失敗或其他錯誤，顯示錯誤訊息
       toastError(`提交維護失敗：${err.message}`);
     }
   };
@@ -384,24 +473,49 @@
   $btnDevice?.addEventListener('click', () => {
     $btnDevice.classList.add('active');
     $btnReport.classList.remove('active');
+    $btnMaintenanceHistory.classList.remove('active');
     $deviceView.style.display = '';
     $reportView.style.display = 'none';
+    $maintenanceHistoryView.style.display = 'none';
   });
 
   $btnReport?.addEventListener('click', async () => {
     $btnReport.classList.add('active');
     $btnDevice.classList.remove('active');
+    $btnMaintenanceHistory.classList.remove('active');
     $deviceView.style.display = 'none';
     $reportView.style.display = '';
+    $maintenanceHistoryView.style.display = 'none';
     await renderReport();
+  });
+
+  $btnMaintenanceHistory?.addEventListener('click', async () => {
+    $btnMaintenanceHistory.classList.add('active');
+    $btnDevice.classList.remove('active');
+    $btnReport.classList.remove('active');
+    $deviceView.style.display = 'none';
+    $reportView.style.display = 'none';
+    $maintenanceHistoryView.style.display = '';
+    
+    // 載入設備選擇器和維護紀錄
+    await loadDeviceSelector();
+    await loadMaintenanceHistory();
+  });
+
+  // 設備選擇器變更事件
+  $maintenanceDeviceSelector?.addEventListener('change', async (e) => {
+    const deviceId = e.target.value;
+    await loadMaintenanceHistory(deviceId || null);
   });
 
   // 刷新
   $btnRefresh?.addEventListener('click', async () => {
     if ($deviceView.style.display !== 'none') {
       await loadDeviceStatus();
-    } else {
+    } else if ($reportView.style.display !== 'none') {
       await renderReport();
+    } else if ($maintenanceHistoryView.style.display !== 'none') {
+      await loadMaintenanceHistory();
     }
     toastSuccess('已刷新');
   });

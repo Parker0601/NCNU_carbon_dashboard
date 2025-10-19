@@ -129,6 +129,7 @@ function normalizeTasks(apiData) {
       id: `S-${s.scheduleId}`,
       title: s.title || (s.deviceName ? `設備：${s.deviceName}` : '工作任務'),
       desc: s.description || '',
+      deviceId: s.deviceId, // 後端已提供，送申請時需要
       deviceName: s.deviceName || '',
       start, end,
       owner: '自己',
@@ -401,21 +402,91 @@ $(document).ready(async function () {
     }
   });
 
-  // 列表操作：申請（TODO：接你的實際 API）
+  // 列表操作：申請（維修申請表單）
   $(document).on('click', '.btn-apply-task', async function () {
     const id = $(this).data('id');
-    const ok = await Swal.fire({
-      title: '送出申請？',
-      text: '是否要將此任務送出給主管審查？',
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: '送出'
-    }).then(r => r.isConfirmed);
-    if (!ok) return;
+    const task = currentSchedule.find(x => x.id === String(id));
+    if (!task) return;
 
-    // TODO：改為呼叫後端 API（例：PATCH /api/schedule/submit/:scheduleId），成功後重新 loadMyTasks()
-    updateLocalStatus(id, '申請中');
-    Swal.fire('已送出申請', '', 'success');
+    // 取得當前時間戳
+    const now = new Date();
+    const timestamp = now.toISOString().slice(0, 19).replace('T', ' ');
+
+    const result = await Swal.fire({
+      title: '維修申請表單',
+      html: `
+        <div class="form-group text-left">
+          <label class="font-weight-bold">1. 基本資訊</label>
+          <input type="text" class="form-control" value="維修任務 - ${task.title}" readonly style="background-color: #f8f9fa; color: #6c757d;">
+          <small class="form-text text-muted">任務基本資訊（不可編輯）</small>
+        </div>
+        
+        <div class="form-group text-left">
+          <label class="font-weight-bold">2. 維修描述 <span class="text-danger">*</span></label>
+          <textarea id="maintenance-description" class="form-control" rows="4" placeholder="請詳細描述維修過程、發現的問題、解決方案等..."></textarea>
+          <small class="form-text text-muted">請詳細描述維修過程和結果</small>
+        </div>
+        
+        <div class="form-group text-left">
+          <label class="font-weight-bold">3. 照片</label>
+          <input type="text" class="form-control" value="照片" readonly style="background-color: #f8f9fa; color: #6c757d;">
+          <small class="form-text text-muted">照片上傳功能（暫未開放）</small>
+        </div>
+        
+        <div class="form-group text-left">
+          <label class="font-weight-bold">4. 負責人簽名</label>
+          <input type="text" class="form-control" value="負責人簽名" readonly style="background-color: #f8f9fa; color: #6c757d;">
+          <small class="form-text text-muted">電子簽名功能（暫未開放）</small>
+        </div>
+        
+        <div class="form-group text-left">
+          <label class="font-weight-bold">5. 維修時間紀錄</label>
+          <input type="text" class="form-control" value="${timestamp}" readonly style="background-color: #f8f9fa; color: #6c757d;">
+          <small class="form-text text-muted">維修完成時間（自動記錄）</small>
+        </div>
+      `,
+      width: '600px',
+      showCancelButton: true,
+      confirmButtonText: '送出申請',
+      cancelButtonText: '取消',
+      preConfirm: () => {
+        const description = document.getElementById('maintenance-description')?.value?.trim();
+        if (!description) {
+          Swal.showValidationMessage('請填寫維修描述');
+          return false;
+        }
+        return { description, timestamp };
+      }
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      // 呼叫後端：提交維修（寫入 maintenance_records.employee_description 並結束當前維修）
+      const devId = task.deviceId;
+      if (devId) {
+        await fetchJSON(`${API_BASE}/schedule/maintenance`, {
+          method: 'POST',
+          body: JSON.stringify({
+            deviceId: Number(devId),
+            employee_description: result.value.description,
+            endTime: new Date().toISOString()
+          })
+        });
+      }
+
+      // 成功後重載我的任務並刷新畫面
+      await loadMyTasks();
+      if (calendar) {
+        calendar.removeAllEvents();
+        calendar.addEventSource(toCalendarEvents(currentSchedule));
+      }
+      renderList(currentSchedule);
+
+      Swal.fire('已送出申請', '維修申請已提交給主管審查', 'success');
+    } catch (error) {
+      Swal.fire('申請失敗', error.message || '請稍後再試', 'error');
+    }
   });
 
   // 列表操作：重新開始（TODO：接你的實際 API）

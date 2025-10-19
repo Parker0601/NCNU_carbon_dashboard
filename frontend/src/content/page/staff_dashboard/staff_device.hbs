@@ -18,6 +18,7 @@
   <div>
     <button id="btn-device-view" class="btn btn-outline-primary btn-sm active">設備狀態</button>
     <button id="btn-report-view" class="btn btn-outline-secondary btn-sm">設備報表</button>
+    <button id="btn-maintenance-history" class="btn btn-outline-success btn-sm">設備維護紀錄</button>
   </div>
   <div>
     <button id="btn-refresh" class="btn btn-outline-info btn-sm mr-2">
@@ -53,6 +54,45 @@
         <div class="panel-container show">
           <div class="panel-content">
             <div id="report-container" style="height: 400px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 設備維護紀錄視圖 -->
+<div id="maintenance-history-view" style="display:none;">
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="panel">
+        <div class="panel-hdr">
+          <h2>設備維護紀錄</h2>
+          <div class="panel-toolbar">
+            <select id="maintenance-device-selector" class="form-control form-control-sm">
+              <option value="">選擇設備查看維護紀錄</option>
+            </select>
+          </div>
+        </div>
+        <div class="panel-container show">
+          <div class="panel-content">
+            <div class="table-responsive">
+              <table id="maintenance-history-table" class="table table-bordered table-hover table-striped w-100 mb-0">
+                <thead>
+                  <tr>
+                    <th>設備名稱</th>
+                    <th>維護人員</th>
+                    <th>維護描述</th>
+                    <th>開始時間</th>
+                    <th>結束時間</th>
+                    <th>退回描述</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- 維護紀錄將由JS動態生成 -->
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>

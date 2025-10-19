@@ -1,13 +1,15 @@
 // ======================== 全域常數與工具 ========================
 // 1) 狀態對照（設備）
-const DEVICE_STATUS_LABEL = { '1': '正常運行', '2': '維護中', '3': '故障' };
+const DEVICE_STATUS_LABEL = { '1': '正常運行', '2': '維護中', '3': '故障', '4': '已指派未處理' };
 
 // 2) API Root & Routes
 const API_ROOT = document.getElementById('app-config')?.dataset?.apiRoot || 'http://localhost:3000/api';
+const SCHEDULE_API_BASE = `${API_ROOT}/schedule`;
 const ROUTES = {
   assignSnapshot: `${API_ROOT}/schedule/assign-human-resource`,
   // 主管分派：一次更新 Device / Schedule / MaintainRecord
   assign:        `${API_ROOT}/schedule/assign-human-resource`,
+  maintenanceHistory: `${SCHEDULE_API_BASE}/maintenance-history`,
 };
 
 // 3) 共用 fetch（帶 JWT）
@@ -48,7 +50,7 @@ const issuesByDevice = new Map();// deviceId -> { id: issueId, desc: string }
 // 新增：一次載入「故障清單 + 人員清單 + 問題清單」
 async function loadSnapshot() {
   const { data } = await apiFetch(ROUTES.assignSnapshot);
-  // 左側：故障機台
+  // 左側：異常機台（包含故障、維護中、已指派未處理）
   const faultyDevices = data?.faultyDevices ?? [];
   renderAlertList(faultyDevices.map(d => ({
     id: d.deviceId,
@@ -94,7 +96,10 @@ function renderAlertList(list) {
     const name = d.name || `設備#${d.id}`;
     const s = String(d.status ?? '');
     const sLabel = DEVICE_STATUS_LABEL[s] || s || '-';
-    const badgeClass = s === '3' ? 'badge-danger' : s === '2' ? 'badge-warning' : 'badge-secondary';
+    const badgeClass = s === '3' ? 'badge-danger' 
+                     : s === '4' ? 'badge-info' 
+                     : s === '2' ? 'badge-warning' 
+                     : 'badge-secondary';
 
     return `
       <div class="d-flex justify-content-between align-items-center border p-2 mb-2 rounded">
@@ -277,12 +282,132 @@ function startAutoRefresh() {
 function stopAutoRefresh() { clearInterval(window.__monitorTimer); }
 
 
+// ======================== 維修紀錄功能 ========================
+let maintenanceHistoryData = []; // 快取維修紀錄資料
+
+// 載入維修紀錄
+async function loadMaintenanceHistory(deviceId = null) {
+  try {
+    const url = deviceId ? 
+      `${ROUTES.maintenanceHistory}?deviceId=${deviceId}` : 
+      ROUTES.maintenanceHistory;
+    
+    const resp = await apiFetch(url, { method: 'GET' });
+    maintenanceHistoryData = resp.data || [];
+    renderMaintenanceHistoryTable();
+  } catch (err) {
+    console.error('載入維修紀錄失敗：', err);
+    maintenanceHistoryData = [];
+    renderMaintenanceHistoryTable();
+  }
+}
+
+// 渲染維修紀錄表格
+function renderMaintenanceHistoryTable() {
+  const $tbody = document.querySelector('#maintenance-history-table tbody');
+  if (!$tbody) return;
+
+  if (maintenanceHistoryData.length === 0) {
+    $tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暫無維修紀錄</td></tr>';
+    return;
+  }
+
+  $tbody.innerHTML = maintenanceHistoryData.map(record => `
+    <tr>
+      <td>${record.deviceName || '未知設備'}</td>
+      <td>${record.userName || '未知人員'}</td>
+      <td>${record.employeeDescription || '-'}</td>
+      <td>${record.createTime ? new Date(record.createTime).toLocaleString('zh-TW') : '-'}</td>
+      <td>${record.endTime ? new Date(record.endTime).toLocaleString('zh-TW') : '-'}</td>
+      <td>${record.bossDescription || '-'}</td>
+    </tr>
+  `).join('');
+}
+
+// 載入設備選項到篩選器
+async function loadDeviceFilter() {
+  const $filter = document.querySelector('#maintenance-device-filter');
+  if (!$filter) return;
+
+  try {
+    // 從現有的設備資料中取得設備列表
+    const devices = Array.from(new Set(maintenanceHistoryData.map(record => ({
+      id: record.deviceId,
+      name: record.deviceName
+    }))));
+
+    $filter.innerHTML = '<option value="">全部設備</option>' + 
+      devices.map(device => `<option value="${device.id}">${device.name}</option>`).join('');
+  } catch (err) {
+    console.error('載入設備篩選器失敗：', err);
+  }
+}
+
+// 搜尋維修紀錄
+function searchMaintenanceHistory() {
+  const searchTerm = document.querySelector('#maintenance-search')?.value?.toLowerCase() || '';
+  const deviceFilter = document.querySelector('#maintenance-device-filter')?.value || '';
+
+  let filteredData = maintenanceHistoryData;
+
+  // 設備篩選
+  if (deviceFilter) {
+    filteredData = filteredData.filter(record => record.deviceId == deviceFilter);
+  }
+
+  // 搜尋篩選
+  if (searchTerm) {
+    filteredData = filteredData.filter(record => 
+      (record.userName && record.userName.toLowerCase().includes(searchTerm)) ||
+      (record.employeeDescription && record.employeeDescription.toLowerCase().includes(searchTerm))
+    );
+  }
+
+  // 更新表格顯示
+  const $tbody = document.querySelector('#maintenance-history-table tbody');
+  if (!$tbody) return;
+
+  if (filteredData.length === 0) {
+    $tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">沒有符合條件的維修紀錄</td></tr>';
+    return;
+  }
+
+  $tbody.innerHTML = filteredData.map(record => `
+    <tr>
+      <td>${record.deviceName || '未知設備'}</td>
+      <td>${record.userName || '未知人員'}</td>
+      <td>${record.employeeDescription || '-'}</td>
+      <td>${record.createTime ? new Date(record.createTime).toLocaleString('zh-TW') : '-'}</td>
+      <td>${record.endTime ? new Date(record.endTime).toLocaleString('zh-TW') : '-'}</td>
+      <td>${record.bossDescription || '-'}</td>
+    </tr>
+  `).join('');
+}
+
+// 綁定維修紀錄事件
+function bindMaintenanceHistoryEvents() {
+  // 設備篩選器變更事件
+  const $deviceFilter = document.querySelector('#maintenance-device-filter');
+  if ($deviceFilter) {
+    $deviceFilter.addEventListener('change', searchMaintenanceHistory);
+  }
+
+  // 搜尋框輸入事件
+  const $searchInput = document.querySelector('#maintenance-search');
+  if ($searchInput) {
+    $searchInput.addEventListener('input', searchMaintenanceHistory);
+  }
+}
+
 // ======================== 初始化 ========================
 async function init() {
   bindLeftPanelEvents();   // 左側「指派」按鈕（事件委派）
   bindStaffEvents();       // 右上排序下拉
+  bindMaintenanceHistoryEvents(); // 維修紀錄事件
   await loadSnapshot();
   renderStaffTable();
+  await loadMaintenanceHistory(); // 載入維修紀錄
+  loadDeviceFilter(); // 載入設備篩選器
   startAutoRefresh();
 }
 

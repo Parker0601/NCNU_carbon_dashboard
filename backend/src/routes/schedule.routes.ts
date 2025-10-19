@@ -33,7 +33,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { eq, and, or, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { devices, issues, users, schedule, maintenanceRecords } from '@/db/schema';
 import { authenticateToken, requireUser, requireAdmin } from '@/middleware/auth';
@@ -61,15 +61,18 @@ const assignHumanResourceSchema = z.object({
  * 權限：僅主管 (role=2) 可訪問
  * 
  * 回傳資料：
- * 1. faultyDevices: 所有故障的設備清單 (device_status = '3')
+ * 1. faultyDevices: 所有異常設備清單 (device_status = '2', '3', '4')
+ *    - '2': 維護中
+ *    - '3': 故障
+ *    - '4': 已指派未處理
  * 2. availableStaff: 所有員工清單 (role = '1')，包含員工狀態 (idle/busy)
  * 3. existingIssues: 所有待處理的問題清單 (issue_status = '1')
  * 
- * 使用場景：主管進入人力指派頁面時，查看哪些設備故障、哪些員工可用
+ * 使用場景：主管進入人力指派頁面時，查看哪些設備異常、哪些員工可用
  */
 router.get('/assign-human-resource', requireAdmin, async (_req: Request, res: Response) => {
   try {
-    // 1. 獲取故障設備 (device_status = '3')
+    // 1. 獲取異常設備 (device_status = '2', '3', '4')
     const faultyDevices = await db
       .select({
         deviceId: devices.id,
@@ -79,7 +82,7 @@ router.get('/assign-human-resource', requireAdmin, async (_req: Request, res: Re
         ratio: devices.ratio
       })
       .from(devices)
-      .where(or(eq(devices.status, '3'), eq(devices.status, '2')));
+      .where(sql`${devices.status} IN ('2', '3', '4')`);
 
     // 2. 獲取所有員工 (role = '1') 及其狀態
     const availableStaff = await db
@@ -195,6 +198,12 @@ router.post('/assign-human-resource', requireAdmin, async (req: Request, res: Re
           status: 'assigned'
         })
         .returning();
+
+      // 更新設備狀態為「已指派未處理」
+      await tx
+        .update(devices)
+        .set({ status: sql`'4'` })  // 4: 已指派未處理
+        .where(eq(devices.id, existingIssue.deviceId));
 
       // 在指派時建立對應的維修記錄（先寫入 user_id 與 create_time，其他欄位之後補）
       // 若已存在未結束的紀錄則不重複建立
@@ -520,7 +529,10 @@ router.get('/maintenance-history', async (req: Request, res: Response) => {
       .innerJoin(issues, eq(maintenanceRecords.issueId, issues.id))
       .innerJoin(devices, eq(issues.deviceId, devices.id))
       .innerJoin(users, eq(maintenanceRecords.userId, users.id))
-      .where(deviceId ? eq(devices.id, deviceId) : undefined)
+      .where(and(
+        deviceId ? eq(devices.id, deviceId) : undefined,
+        sql`${maintenanceRecords.endTime} IS NOT NULL`
+      ))
       .orderBy(desc(maintenanceRecords.createTime));
 
     return successResponse(res, history, 'Maintenance history retrieved successfully');

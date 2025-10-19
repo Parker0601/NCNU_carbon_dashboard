@@ -73,6 +73,56 @@
   </div>
 </div>
 
+<!-- 維修紀錄區塊 -->
+<div class="row mt-4">
+  <div class="col-12">
+    <div id="panel-3" class="panel">
+      <div class="panel-hdr">
+        <h2>維修紀錄</h2>
+        <div class="panel-toolbar">
+          <div class="input-group">
+            <div class="input-group-prepend">
+              <span class="input-group-text">設備篩選</span>
+            </div>
+            <select id="maintenance-device-filter" class="form-control">
+              <option value="">全部設備</option>
+            </select>
+          </div>
+          <div class="input-group ml-2">
+            <div class="input-group-prepend">
+              <span class="input-group-text">搜尋</span>
+            </div>
+            <input type="text" id="maintenance-search" class="form-control" placeholder="搜尋維護人員或描述...">
+          </div>
+          <button class="btn btn-panel" data-action="panel-collapse" data-toggle="tooltip" data-offset="0,10" data-original-title="收合"></button>
+          <button class="btn btn-panel" data-action="panel-fullscreen" data-toggle="tooltip" data-offset="0,10" data-original-title="全螢幕"></button>
+        </div>
+      </div>
+      <div class="panel-container show">
+        <div class="panel-content">
+          <div class="table-responsive">
+            <table id="maintenance-history-table" class="table table-bordered table-hover table-striped w-100 mb-0">
+              <thead>
+                <tr>
+                  <th>設備名稱</th>
+                  <th>維護人員</th>
+                  <th>維護描述</th>
+                  <th>開始時間</th>
+                  <th>結束時間</th>
+                  <th>退回描述</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- 維修紀錄將由JS動態生成 -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 全域設定（先保留，可供之後串 API） -->
 <div id="app-config"
      data-api-root="http://localhost:3000/api"

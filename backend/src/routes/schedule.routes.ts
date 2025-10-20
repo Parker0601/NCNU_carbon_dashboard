@@ -33,11 +33,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-<<<<<<< HEAD
-import { eq, and, desc, sql } from 'drizzle-orm';
-=======
-import { eq, and, or, desc, sql, gte, lte } from 'drizzle-orm';
->>>>>>> 7c719d2 (更改manerger check table)
+import { eq, and, desc, sql, gte, lte } from 'drizzle-orm';
 import { db } from '@/db';
 import { devices, issues, users, schedule, maintenanceRecords } from '@/db/schema';
 import { authenticateToken, requireUser, requireAdmin } from '@/middleware/auth';

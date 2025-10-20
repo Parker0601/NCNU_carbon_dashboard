@@ -33,7 +33,11 @@
  */
 
 import { Router, Request, Response } from 'express';
+<<<<<<< HEAD
 import { eq, and, desc, sql } from 'drizzle-orm';
+=======
+import { eq, and, or, desc, sql, gte, lte } from 'drizzle-orm';
+>>>>>>> 7c719d2 (更改manerger check table)
 import { db } from '@/db';
 import { devices, issues, users, schedule, maintenanceRecords } from '@/db/schema';
 import { authenticateToken, requireUser, requireAdmin } from '@/middleware/auth';
@@ -538,6 +542,73 @@ router.get('/maintenance-history', async (req: Request, res: Response) => {
     return successResponse(res, history, 'Maintenance history retrieved successfully');
   } catch (error) {
     return errorResponse(res, 'Failed to get maintenance history', 500);
+  }
+});
+
+// ===========================================
+// GET /api/schedule/manager-view - 主管檢視周排程
+// ===========================================
+/**
+ * 功能：依時間區間列出排程，供主管審核頁面載入
+ * 權限：僅主管 (role=2) 可訪問
+ * Query:
+ * - from: ISO 字串（含時區）
+ * - to:   ISO 字串（含時區）
+ * 回傳：{ data: Array<{ id, title, startTime, endTime, userName, deviceName, description, status }> }
+ */
+router.get('/manager-view', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const fromStr = String(req.query.from || '');
+    const toStr = String(req.query.to || '');
+
+    let from: Date | null = null;
+    let to: Date | null = null;
+    if (fromStr) {
+      const d = new Date(fromStr);
+      if (!isNaN(+d)) from = d;
+    }
+    if (toStr) {
+      const d = new Date(toStr);
+      if (!isNaN(+d)) to = d;
+    }
+
+    // 無效參數則以「本週一 00:00 ~ 下週一 00:00」為預設
+    if (!from || !to) {
+      const now = new Date();
+      const day = now.getDay() || 7; // 周日視為 7
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - (day - 1));
+      monday.setHours(0, 0, 0, 0);
+      const nextMonday = new Date(monday);
+      nextMonday.setDate(monday.getDate() + 7);
+      from = monday;
+      to = nextMonday;
+    }
+
+    const list = await db
+      .select({
+        id: schedule.id,
+        title: schedule.title,
+        description: schedule.description,
+        date: schedule.date,
+        startTime: schedule.startTime,
+        endTime: schedule.endTime,
+        status: schedule.status,
+        userName: users.name,
+        deviceName: devices.name
+      })
+      .from(schedule)
+      .leftJoin(users, eq(schedule.userId, users.id))
+      .leftJoin(devices, eq(schedule.deviceId, devices.id))
+      .where(and(
+        gte(schedule.startTime, from!),
+        lte(schedule.startTime, to!)
+      ))
+      .orderBy(desc(schedule.startTime));
+
+    return successResponse(res, list, 'Manager view schedule retrieved successfully');
+  } catch (error) {
+    return errorResponse(res, 'Failed to get manager view', 500);
   }
 });
 

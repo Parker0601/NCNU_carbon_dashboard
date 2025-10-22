@@ -43,9 +43,9 @@ export declare const carbonDataQuerySchema: z.ZodObject<{
     endDate?: string | undefined;
 }, {
     limit?: string | undefined;
-    page?: string | undefined;
     startDate?: string | undefined;
     endDate?: string | undefined;
+    page?: string | undefined;
 }>;
 export type CreateCarbonDataInput = z.infer<typeof createCarbonDataSchema>;
 export type UpdateCarbonDataInput = z.infer<typeof updateCarbonDataSchema>;

@@ -32,7 +32,9 @@ router.get('/status', async (_req, res) => {
             .select({
             id: devices.id,
             status: devices.status,
-            name: devices.name
+            name: devices.name,
+            bootTime: devices.bootTime,
+            ratio: devices.ratio
         })
             .from(devices)
             .orderBy(devices.id);
@@ -67,6 +69,10 @@ router.post('/report-issue', async (req, res) => {
             createTime: new Date()
         })
             .returning();
+        await db
+            .update(devices)
+            .set({ status: '3' })
+            .where(eq(devices.id, deviceId));
         return successResponse(res, {
             issueId: newIssue.id,
             deviceId: newIssue.deviceId,
@@ -116,7 +122,7 @@ router.post('/maintenance', async (req, res) => {
                 deviceId: deviceId,
                 description: `維修記錄: ${description}`,
                 issuer: req.user.id,
-                assigner: req.user.id,
+                assigner: null,
                 status: '3',
                 createTime: new Date()
             })
@@ -220,6 +226,42 @@ router.get('/:id/maintenance', async (req, res) => {
     }
     catch (error) {
         return errorResponse(res, 'Failed to get device maintenance history', 500);
+    }
+});
+router.get('/issues', async (req, res) => {
+    try {
+        const deviceId = req.query.deviceId ? Number(req.query.deviceId) : null;
+        const assignedMe = req.query.assigned === 'me';
+        const q = db
+            .select({
+            id: issues.id,
+            deviceId: issues.deviceId,
+            description: issues.description,
+            status: issues.status,
+            createTime: issues.createTime,
+            assignerId: issues.assigner,
+            assignerName: users.name,
+            deviceName: devices.name
+        })
+            .from(issues)
+            .leftJoin(devices, eq(issues.deviceId, devices.id))
+            .leftJoin(users, eq(issues.assigner, users.id))
+            .orderBy(desc(issues.createTime));
+        let rows = await q;
+        if (deviceId) {
+            rows = rows.filter(r => r.deviceId === deviceId);
+        }
+        if (assignedMe) {
+            if (!req.user) {
+                return errorResponse(res, 'User not authenticated', 401);
+            }
+            rows = rows.filter(r => r.assignerId === req.user.id);
+        }
+        return successResponse(res, rows, 'Issues retrieved successfully');
+    }
+    catch (error) {
+        console.error('[GET /api/devices/issues] error:', error);
+        return errorResponse(res, 'Failed to get issues', 500);
     }
 });
 router.get('/:id', async (req, res) => {

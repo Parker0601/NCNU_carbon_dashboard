@@ -1,15 +1,18 @@
 import { pgTable, pgEnum, serial, integer, text, doublePrecision, timestamp, date, varchar } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 export const scrapStatusEnum = pgEnum('scrap_status', ['1', '2', '3']);
-export const deviceStatusEnum = pgEnum('device_status', ['1', '2', '3']);
+export const deviceStatusEnum = pgEnum('device_status', ['1', '2', '3', '4']);
 export const issueStatusEnum = pgEnum('issue_status', ['1', '2', '3']);
 export const userRoleEnum = pgEnum('user_role', ['1', '2', '3']);
+export const userStatusEnum = pgEnum('user_status', ['idle', 'busy']);
+export const scheduleStatusEnum = pgEnum('schedule_status', ['assigned', 'accepted', 'submitted', 'approved', 'rejected']);
 export const users = pgTable('users', {
     id: serial('id').primaryKey().notNull(),
     name: text('name').notNull(),
     password: text('password').notNull(),
     role: userRoleEnum('role').notNull(),
     mail: text('mail'),
+    status: userStatusEnum('status'),
     createTime: timestamp('create_time').notNull(),
 });
 export const devices = pgTable('devices', {
@@ -18,6 +21,7 @@ export const devices = pgTable('devices', {
     name: text('name').notNull(),
     bootTime: timestamp('boot_time').notNull(),
     ratio: doublePrecision('ratio'),
+    issueCount: integer('issue_count').default(0),
 });
 export const scraps = pgTable('scraps', {
     id: serial('id').primaryKey().notNull(),
@@ -34,7 +38,7 @@ export const issues = pgTable('issues', {
     deviceId: integer('device_id').notNull().references(() => devices.id),
     description: text('description'),
     issuer: integer('issuer').notNull().references(() => users.id),
-    assigner: integer('assigner').notNull().references(() => users.id),
+    assigner: integer('assigner').references(() => users.id),
     status: issueStatusEnum('status').notNull(),
     createTime: timestamp('create_time').notNull(),
 });
@@ -42,9 +46,10 @@ export const maintenanceRecords = pgTable('maintenance_records', {
     id: serial('id').primaryKey().notNull(),
     issueId: integer('issue_id').notNull().references(() => issues.id),
     userId: integer('user_id').notNull().references(() => users.id),
-    description: text('description').notNull(),
+    employeeDescription: text('employee_description'),
+    bossDescription: text('boss_description'),
     createTime: timestamp('create_time').notNull(),
-    endTime: timestamp('end_time').notNull(),
+    endTime: timestamp('end_time'),
 });
 export const schedule = pgTable('schedule', {
     id: serial('id').primaryKey().notNull(),
@@ -54,7 +59,8 @@ export const schedule = pgTable('schedule', {
     description: text('description'),
     date: date('date').notNull(),
     startTime: timestamp('start_time').notNull(),
-    endTime: timestamp('end_time').notNull(),
+    endTime: timestamp('end_time'),
+    status: scheduleStatusEnum('status').notNull().default('assigned'),
 });
 export const energyRecord = pgTable('energy_record', {
     id: serial('id').primaryKey().notNull(),
@@ -68,6 +74,7 @@ export const carbon = pgTable('carbon', {
     fuelName: text('Fuel_name'),
     consumption: integer('consumption'),
     unit: text('unit'),
+    class: text('class'),
     co2: doublePrecision('CO2'),
     ch4: doublePrecision('CH4'),
     n2o: doublePrecision('N2O'),
@@ -92,7 +99,7 @@ export const carbonCalculations = pgTable('carbon_calculations', {
     unit: text('unit').notNull(),
     totalEmission: doublePrecision('total_emission').notNull(),
     calculationDate: date('calculation_date').notNull(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at').notNull(),
     notes: text('notes'),
 });
 export const usersRelations = relations(users, ({ many }) => ({

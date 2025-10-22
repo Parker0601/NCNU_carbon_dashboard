@@ -1,7 +1,9 @@
 export declare const scrapStatusEnum: import("drizzle-orm/pg-core").PgEnum<["1", "2", "3"]>;
-export declare const deviceStatusEnum: import("drizzle-orm/pg-core").PgEnum<["1", "2", "3"]>;
+export declare const deviceStatusEnum: import("drizzle-orm/pg-core").PgEnum<["1", "2", "3", "4"]>;
 export declare const issueStatusEnum: import("drizzle-orm/pg-core").PgEnum<["1", "2", "3"]>;
 export declare const userRoleEnum: import("drizzle-orm/pg-core").PgEnum<["1", "2", "3"]>;
+export declare const userStatusEnum: import("drizzle-orm/pg-core").PgEnum<["idle", "busy"]>;
+export declare const scheduleStatusEnum: import("drizzle-orm/pg-core").PgEnum<["assigned", "accepted", "submitted", "approved", "rejected"]>;
 export declare const users: import("drizzle-orm/pg-core").PgTableWithColumns<{
     name: "users";
     schema: undefined;
@@ -91,6 +93,23 @@ export declare const users: import("drizzle-orm/pg-core").PgTableWithColumns<{
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        status: import("drizzle-orm/pg-core").PgColumn<{
+            name: "status";
+            tableName: "users";
+            dataType: "string";
+            columnType: "PgEnumColumn";
+            data: "idle" | "busy";
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: ["idle", "busy"];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         createTime: import("drizzle-orm/pg-core").PgColumn<{
             name: "create_time";
             tableName: "users";
@@ -137,14 +156,14 @@ export declare const devices: import("drizzle-orm/pg-core").PgTableWithColumns<{
             tableName: "devices";
             dataType: "string";
             columnType: "PgEnumColumn";
-            data: "1" | "2" | "3";
+            data: "1" | "2" | "3" | "4";
             driverParam: string;
             notNull: true;
             hasDefault: false;
             isPrimaryKey: false;
             isAutoincrement: false;
             hasRuntimeDefault: false;
-            enumValues: ["1", "2", "3"];
+            enumValues: ["1", "2", "3", "4"];
             baseColumn: never;
             identity: undefined;
             generated: undefined;
@@ -192,6 +211,23 @@ export declare const devices: import("drizzle-orm/pg-core").PgTableWithColumns<{
             driverParam: string | number;
             notNull: false;
             hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        issueCount: import("drizzle-orm/pg-core").PgColumn<{
+            name: "issue_count";
+            tableName: "devices";
+            dataType: "number";
+            columnType: "PgInteger";
+            data: number;
+            driverParam: string | number;
+            notNull: false;
+            hasDefault: true;
             isPrimaryKey: false;
             isAutoincrement: false;
             hasRuntimeDefault: false;
@@ -425,7 +461,7 @@ export declare const issues: import("drizzle-orm/pg-core").PgTableWithColumns<{
             columnType: "PgInteger";
             data: number;
             driverParam: string | number;
-            notNull: true;
+            notNull: false;
             hasDefault: false;
             isPrimaryKey: false;
             isAutoincrement: false;
@@ -527,14 +563,31 @@ export declare const maintenanceRecords: import("drizzle-orm/pg-core").PgTableWi
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
-        description: import("drizzle-orm/pg-core").PgColumn<{
-            name: "description";
+        employeeDescription: import("drizzle-orm/pg-core").PgColumn<{
+            name: "employee_description";
             tableName: "maintenance_records";
             dataType: "string";
             columnType: "PgText";
             data: string;
             driverParam: string;
-            notNull: true;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        bossDescription: import("drizzle-orm/pg-core").PgColumn<{
+            name: "boss_description";
+            tableName: "maintenance_records";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
             hasDefault: false;
             isPrimaryKey: false;
             isAutoincrement: false;
@@ -568,7 +621,7 @@ export declare const maintenanceRecords: import("drizzle-orm/pg-core").PgTableWi
             columnType: "PgTimestamp";
             data: Date;
             driverParam: string;
-            notNull: true;
+            notNull: false;
             hasDefault: false;
             isPrimaryKey: false;
             isAutoincrement: false;
@@ -711,12 +764,29 @@ export declare const schedule: import("drizzle-orm/pg-core").PgTableWithColumns<
             columnType: "PgTimestamp";
             data: Date;
             driverParam: string;
-            notNull: true;
+            notNull: false;
             hasDefault: false;
             isPrimaryKey: false;
             isAutoincrement: false;
             hasRuntimeDefault: false;
             enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        status: import("drizzle-orm/pg-core").PgColumn<{
+            name: "status";
+            tableName: "schedule";
+            dataType: "string";
+            columnType: "PgEnumColumn";
+            data: "assigned" | "accepted" | "submitted" | "approved" | "rejected";
+            driverParam: string;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: ["assigned", "accepted", "submitted", "approved", "rejected"];
             baseColumn: never;
             identity: undefined;
             generated: undefined;
@@ -875,6 +945,23 @@ export declare const carbon: import("drizzle-orm/pg-core").PgTableWithColumns<{
         }, {}, {}>;
         unit: import("drizzle-orm/pg-core").PgColumn<{
             name: "unit";
+            tableName: "carbon";
+            dataType: "string";
+            columnType: "PgText";
+            data: string;
+            driverParam: string;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: [string, ...string[]];
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
+        class: import("drizzle-orm/pg-core").PgColumn<{
+            name: "class";
             tableName: "carbon";
             dataType: "string";
             columnType: "PgText";
@@ -1281,7 +1368,7 @@ export declare const carbonCalculations: import("drizzle-orm/pg-core").PgTableWi
             data: Date;
             driverParam: string;
             notNull: true;
-            hasDefault: true;
+            hasDefault: false;
             isPrimaryKey: false;
             isAutoincrement: false;
             hasRuntimeDefault: false;
@@ -1331,7 +1418,7 @@ export declare const scrapsRelations: import("drizzle-orm").Relations<"scraps", 
 export declare const issuesRelations: import("drizzle-orm").Relations<"issues", {
     device: import("drizzle-orm").One<"devices", true>;
     issuer: import("drizzle-orm").One<"users", true>;
-    assigner: import("drizzle-orm").One<"users", true>;
+    assigner: import("drizzle-orm").One<"users", false>;
 }>;
 export declare const maintenanceRecordsRelations: import("drizzle-orm").Relations<"maintenance_records", {
     issue: import("drizzle-orm").One<"issues", true>;

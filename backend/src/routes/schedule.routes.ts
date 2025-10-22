@@ -42,6 +42,18 @@ import { z } from 'zod';
 
 const router = Router();
 
+// 健康檢查路由（不需要登入）
+router.get('/health', async (_req: Request, res: Response) => {
+  try {
+    // 測試資料庫連線
+    await db.select().from(users).limit(1);
+    return successResponse(res, { status: 'ok', database: 'connected' }, 'Health check passed');
+  } catch (error: any) {
+    console.error('健康檢查失敗:', error);
+    return errorResponse(res, 'Health check failed', 500, error?.message);
+  }
+});
+
 // 所有 schedule 相關路由需登入
 router.use(authenticateToken);
 router.use(requireUser);
@@ -72,7 +84,10 @@ const assignHumanResourceSchema = z.object({
  */
 router.get('/assign-human-resource', requireAdmin, async (_req: Request, res: Response) => {
   try {
+    console.log('開始獲取人力資源指派資料...');
+    
     // 1. 獲取異常設備 (device_status = '2', '3', '4')
+    console.log('查詢異常設備...');
     const faultyDevices = await db
       .select({
         deviceId: devices.id,
@@ -82,21 +97,27 @@ router.get('/assign-human-resource', requireAdmin, async (_req: Request, res: Re
         ratio: devices.ratio
       })
       .from(devices)
-      .where(sql`${devices.status} IN ('2', '3', '4')`);
+      .where(sql`${devices.status} IN ('2', '3', '4')`)
+    
+    console.log('異常設備數量:', faultyDevices.length);
 
     // 2. 獲取所有員工 (role = '1') 及其狀態
+    console.log('查詢員工資料...');
     const availableStaff = await db
       .select({
         userId: users.id,
         userName: users.name,
         userRole: users.role,
-        userStatus: users.status, // 假設已新增此欄位
+        userStatus: users.status,
         mail: users.mail
       })
       .from(users)
-      .where(eq(users.role, '1')); // 1: 一般員工
+      .where(eq(users.role, '1'))
+    
+    console.log('員工數量:', availableStaff.length);
 
     // 3. 獲取現有的問題記錄（包含指派人資訊）
+    console.log('查詢問題記錄...');
     const existingIssues = await db
       .select({
         issueId: issues.id,
@@ -109,15 +130,18 @@ router.get('/assign-human-resource', requireAdmin, async (_req: Request, res: Re
       })
       .from(issues)
       .leftJoin(users, eq(issues.assigner, users.id))
-      .where(eq(issues.status, '1')); // 1: 待處理
+      .where(eq(issues.status, '1'))
+    
+    console.log('問題記錄數量:', existingIssues.length);
 
     return successResponse(res, {
       faultyDevices,
       availableStaff,
       existingIssues
     }, 'Human resource assignment data retrieved successfully');
-  } catch (error) {
-    return errorResponse(res, 'Failed to get human resource assignment data', 500);
+  } catch (error: any) {
+    console.error('獲取人力資源指派資料錯誤:', error);
+    return errorResponse(res, 'Failed to get human resource assignment data', 500, error?.message);
   }
 });
 
@@ -162,7 +186,7 @@ router.post('/assign-human-resource', requireAdmin, async (req: Request, res: Re
       const [assignee] = await tx
         .select()
         .from(users)
-        .where(and(eq(users.id, userId), eq(users.role, '1')));
+        .where(and(eq(users.id, userId), eq(users.role, '1')))
 
       if (!assignee) {
         throw Object.assign(new Error('Invalid assignee or user is not a staff member'), { statusCode: 400 });
@@ -202,7 +226,7 @@ router.post('/assign-human-resource', requireAdmin, async (req: Request, res: Re
       // 更新設備狀態為「已指派未處理」
       await tx
         .update(devices)
-        .set({ status: sql`'4'` })  // 4: 已指派未處理
+        .set({ status: '4' }) // 4: 已指派未處理
         .where(eq(devices.id, existingIssue.deviceId));
 
       // 在指派時建立對應的維修記錄（先寫入 user_id 與 create_time，其他欄位之後補）

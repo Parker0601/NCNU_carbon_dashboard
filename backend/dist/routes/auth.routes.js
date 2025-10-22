@@ -24,6 +24,7 @@ router.post('/register', async (req, res) => {
             password: hashedPassword,
             role: USER_ROLES.EMPLOYEE,
             mail: validatedData.email,
+            status: 'idle',
             createTime: new Date(),
         })
             .returning({

@@ -7,6 +7,9 @@ const plumber = require('gulp-plumber');
 const hb = require('gulp-hb');
 const rename = require('gulp-rename');
 const prettify = require('gulp-prettify');
+const path = require('path');
+const del = require('del');
+const newer = require('gulp-newer');
 
 // ------------------------------------------------------------
 // 1) Scripts copy 任務：把 src/js、src/api 複製到 dist
@@ -45,6 +48,58 @@ gulp.task('styles:copy', stylesCopy);
 
 gulp.task('watch:css', gulp.series('styles:copy', function watchCss() {
   return gulp.watch(CSS_SOURCES, stylesCopy);
+}));
+
+// ------------------------------------------------------------
+// 資產拷貝：把 src/img、src/custom 同步到 dist
+// ------------------------------------------------------------
+const ASSET_SOURCES = [
+  'src/img/**/*',
+  'src/custom/**/*',
+  '!src/**/.DS_Store',
+  '!src/**/Thumbs.db'
+];
+
+function assetsCopy() {
+  return gulp
+    .src(ASSET_SOURCES, { base: 'src', allowEmpty: true })
+    .pipe(newer('dist'))            // 只把較新的檔案拷到 dist
+    .pipe(gulp.dest('dist'));
+}
+gulp.task('assets:copy', assetsCopy);
+
+gulp.task('watch:assets', gulp.series('assets:copy', function watchAssets() {
+  const watcher = gulp.watch(ASSET_SOURCES, { ignoreInitial: true });
+
+  watcher.on('add', (filePath) => {
+    // 新增單檔增量拷貝
+    return gulp.src(filePath, { base: 'src' }).pipe(gulp.dest('dist'));
+  });
+
+  watcher.on('change', (filePath) => {
+    // 變更單檔增量拷貝
+    return gulp.src(filePath, { base: 'src' }).pipe(gulp.dest('dist'));
+  });
+
+  watcher.on('unlink', async (filePath) => {
+    // 刪除單檔，同步刪除 dist 對應檔
+    const rel = path.relative(path.resolve('src'), path.resolve(filePath));
+    const target = path.resolve('dist', rel);
+    await del(target);
+    console.log(`[assets] removed file: ${rel}`);
+  });
+
+  watcher.on('addDir', () => { /* 目錄新增，不需特別處理 */ });
+
+  watcher.on('unlinkDir', async (dirPath) => {
+    // 刪除整個目錄，同步刪除 dist 對應目錄
+    const rel = path.relative(path.resolve('src'), path.resolve(dirPath));
+    const targetDir = path.resolve('dist', rel);
+    await del(targetDir, { force: true });
+    console.log(`[assets] removed dir: ${rel}/`);
+  });
+
+  return watcher;
 }));
 
 // ------------------------------------------------------------
@@ -117,6 +172,8 @@ if (chosen) {
   const watchHbsExists = hasTask('watch:hbs');
   const stylesCopyExists = hasTask('styles:copy');
   const watchCssExists = hasTask('watch:css');
+  const assetsCopyExists = hasTask('assets:copy');
+  const watchAssetsExists = hasTask('watch:assets');
 
   if (['serve', 'dev', 'watch', 'start'].includes(chosen)) {
     // 開發流程：serve/dev/watch/start + scripts:copy + styles:copy + build-html + watch
@@ -124,18 +181,30 @@ if (chosen) {
     if (watchApiExists) tasks.push('watch:api');
     if (gulp.registry().get('scripts:copy')) tasks.push('scripts:copy');
     if (stylesCopyExists) tasks.push('styles:copy');
+    if (assetsCopyExists) tasks.push('assets:copy');
     if (gulp.registry().get('build-html')) tasks.push('build-html');
     if (watchHbsExists) tasks.push('watch:hbs');
     if (watchCssExists) tasks.push('watch:css');
+    if (watchAssetsExists) tasks.push('watch:assets');
 
     gulp.task('default', parallel(...tasks));
 
-    console.log(`[gulp] Default task set to "${chosen}" + scripts:copy${stylesCopyExists ? ' + styles:copy' : ''} + build-html${watchApiExists ? ' + watch:api' : ''}${watchHbsExists ? ' + watch:hbs' : ''}${watchCssExists ? ' + watch:css' : ''}`);
+    console.log(
+      `[gulp] Default task set to "${chosen}" + scripts:copy` +
+      `${stylesCopyExists ? ' + styles:copy' : ''}` +
+      `${assetsCopyExists ? ' + assets:copy' : ''}` +
+      ` + build-html` +
+      `${watchApiExists ? ' + watch:api' : ''}` +
+      `${watchHbsExists ? ' + watch:hbs' : ''}` +
+      `${watchCssExists ? ' + watch:css' : ''}` +
+      `${watchAssetsExists ? ' + watch:assets' : ''}`
+    );
   } else {
     // 建置流程：bundle:all + styles:copy + build-html + build
     const tasks = [];
     if (bundleAllExists) tasks.push('bundle:all');
     if (stylesCopyExists) tasks.push('styles:copy');
+    if (assetsCopyExists) tasks.push('assets:copy');
     if (gulp.registry().get('build-html')) tasks.push('build-html');
     tasks.push(chosen);
 

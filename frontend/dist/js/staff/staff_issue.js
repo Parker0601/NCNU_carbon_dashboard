@@ -113,9 +113,18 @@ function showReportForm() {
     title: '回報設備問題',
     html: `
       <div class="form-group text-left">
-        <label>設備</label>
+        <label>問題類型</label>
+        <select id="issue-type" class="form-control">
+          <option value="device">設備</option>
+          <option value="hr" disabled>人事（尚未開放）</option>
+          <option value="safety" disabled>安全（尚未開放）</option>
+          <option value="admin" disabled>行政（尚未開放）</option>
+        </select>
+      </div>
+
+      <div id="device-select-row" class="form-group text-left">
+        <label>選擇設備</label>
         <select id="issue-device" class="form-control"></select>
-        <small class="form-text text-muted">從設備清單選擇要回報的機台</small>
       </div>
       <div class="form-group text-left">
         <label>回報者</label>

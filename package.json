@@ -8,10 +8,10 @@
     "frontend"
   ],
   "scripts": {
-    "predev": "cd frontend && npx gulp build-html",
+    "predev": "cd frontend && npx gulp build:once",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && npm run dev",
-    "dev:frontend": "cd frontend && npm run gulp",
+    "dev:frontend": "cd frontend && npx gulp",
     "build": "npm run build:backend && npm run build:frontend",
     "build:backend": "cd backend && npm run build",
     "build:frontend": "cd frontend && npm run gulp build",

@@ -124,7 +124,6 @@ function statusLabel(s) {
     });
   }
   
-
   function initCalendar() {
     if (calendar) return;
     const calendarEl = document.getElementById('calendar');

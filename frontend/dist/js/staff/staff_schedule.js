@@ -94,6 +94,17 @@ function eventClassByStatus(stxt) {
   return '';
 }
 
+function statusStyle(status) {
+  switch (String(status).toLowerCase()) {
+    case 'assigned':  return { bg: '#6c757d', border: '#6c757d', text: '#ffffff' }; // 灰：未完成
+    case 'accepted':  return { bg: '#007bff', border: '#007bff', text: '#ffffff' }; // 藍：進行中
+    case 'submitted': return { bg: '#ffc107', border: '#ffc107', text: '#212529' }; // 黃：申請中
+    case 'approved':  return { bg: '#28a745', border: '#28a745', text: '#ffffff' }; // 綠：完成
+    case 'rejected':  return { bg: '#dc3545', border: '#dc3545', text: '#ffffff' }; // 紅：退回
+    default:          return { bg: '#adb5bd', border: '#adb5bd', text: '#ffffff' }; // 淺灰
+  }
+}
+
 // ==============================
 // API → 統一資料模型
 // ==============================
@@ -172,14 +183,20 @@ function normalizeTasks(apiData) {
 // FullCalendar v5 事件轉換
 // ==============================
 function toCalendarEvents(arr) {
-  return arr.map(e => ({
-    id: e.id,
-    title: e.title,
-    start: e.start || null,
-    end: e.end || null,
-    classNames: [eventClassByStatus(e.statusText)],
-    extendedProps: { raw: e }
-  }));
+  return arr.map(e => {
+    const color = statusStyle(e.rawStatus || e.statusText);
+    return {
+      id: e.id,
+      title: e.title,
+      start: e.start || null,
+      end: e.end || null,
+      display: 'block',
+      backgroundColor: color.bg,
+      borderColor: color.border,
+      textColor: color.text,
+      extendedProps: { raw: e }
+    };
+  });
 }
 
 // ==============================
@@ -215,12 +232,11 @@ function renderList(arr) {
     // - 退回(rejected)     -> 顯示「重新開始」
     let actionBtns = `<button class="btn btn-info btn-sm btn-task-detail" data-id="${e.id}">詳情</button>`;
     if (e.type === 'schedule') {
-      if (e.statusText === '未完成') {
+      if (e.statusText === '未完成' || e.statusText === '退回') {
+        // 退回也允許直接「接受任務」→ 進入處理中
         actionBtns += ` <button class="btn btn-primary btn-sm btn-accept-task" data-id="${e.id}">接受任務</button>`;
       } else if (e.statusText === '進行中') {
         actionBtns += ` <button class="btn btn-warning btn-sm btn-apply-task" data-id="${e.id}">申請</button>`;
-      } else if (e.statusText === '退回') {
-        actionBtns += ` <button class="btn btn-secondary btn-sm btn-restart-task" data-id="${e.id}">重新開始</button>`;
       }
     }
 
@@ -298,17 +314,20 @@ function ensureCalendar() {
 
   const el = document.getElementById('calendar');
   calendar = new FullCalendar.Calendar(el, {
-    locale: 'zh-tw',
-    initialView: 'timeGridWeek',
-    headerToolbar: { left: 'title', center: '', right: 'today prev,next' },
-    allDaySlot: false,
-    events: toCalendarEvents(currentSchedule),
-    eventClick: function(info) {
-      const raw = info.event.extendedProps?.raw || {};
-      showTaskDetail(raw);
-    }
-  });
-  calendar.render();
+      initialView: 'dayGridMonth',
+      timeZone: 'local',
+      locale: 'zh-tw',
+      buttonText: { today: '今天', month: '月', week: '週', day: '日', list: '列表' },
+      headerToolbar: { left: 'title', center: '', right: 'today prev,next' },
+      footerToolbar: { left: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek', center: '', right: '' },
+      editable: false,
+      events: (fetchInfo, success) => success(toCalendarEvents(currentSchedule)),
+      eventClick: (info) => {
+        const raw = info.event.extendedProps.raw;
+        if (raw) showTaskDetail(raw);
+      }
+    });
+    calendar.render();
 }
 
 // ==============================

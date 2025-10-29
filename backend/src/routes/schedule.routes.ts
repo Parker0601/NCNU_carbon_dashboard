@@ -370,8 +370,8 @@ router.patch('/accept-task/:scheduleId', async (req: Request, res: Response) => 
       return notFoundResponse(res, 'Schedule not found or not assigned to you');
     }
 
-    if (existingSchedule.status !== 'assigned') {
-      return errorResponse(res, 'Schedule is not in assigned status', 400);
+    if (!['assigned', 'rejected'].includes(existingSchedule.status)) {
+      return errorResponse(res, 'Schedule is not in a receivable status', 400);
     }
 
     // 更新 schedule 狀態為 accepted

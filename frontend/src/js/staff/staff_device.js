@@ -4,6 +4,8 @@
   const SCHEDULE_API_BASE = 'http://localhost:3000/api/schedule';
   const TOKEN_KEY = ['authToken', 'access_token', 'token']; // 你系統存 token 的 key，若不同請改這裡
 
+  
+
   // ========= 小工具 =========
   const TOKEN_KEYS = ['authToken', 'access_token', 'token'];
   const getToken = () => {
@@ -336,135 +338,231 @@
     }
   };
 
-  const ensureReportCanvas = () => {
-    $reportBox.innerHTML = '<canvas id="report-canvas" height="400"></canvas>';
-    return document.getElementById('report-canvas').getContext('2d');
-  };
+// 取代：ensureReportCanvas
+const ensureReportCanvas = () => {
+  // 讓容器高度確實生效，避免比例擠壓
+  $reportBox.innerHTML = '<canvas id="report-canvas" style="width:100%; height:420px;"></canvas>';
+  const canvas = document.getElementById('report-canvas');
+  const ctx = canvas.getContext('2d');
+  return ctx;
+};
 
-  // 1) 運行時數統計（以 bootTime ~ 現在 的小時數 * ratio 作為近似）
-  const renderRuntimeChart = async () => {
-    const ctx = ensureReportCanvas();
-    const { data: devices } = await apiFetch(`${API_BASE}`, { method: 'GET' }).catch(async (e) => {
-      // 若非 admin 取不到 /api/devices，就退而求其次用 /status（無 bootTime/ratio 就顯示不了）
-      const fallback = await apiFetch(`${API_BASE}/status`, { method: 'GET' });
-      return { data: (fallback.data || []).map(d => ({ ...d, bootTime: null, ratio: null })) };
-    });
+// 共用：乾淨的 Bar/Pie options
+const basePlugins = {
+  legend: { position: 'bottom' },
+  title: { display: false }
+};
+const baseLayout = { padding: { top: 8, right: 12, bottom: 8, left: 12 } };
 
-    const now = new Date();
-    const labels = [];
-    const values = [];
+// 統一顏色
+const COLORS = {
+  ok:   '#2ecc71', // 綠
+  warn: '#f1c40f', // 黃
+  err:  '#e74c3c', // 紅
+  blue: '#3498db',
+  gray: '#95a5a6'
+};
 
-    (devices || []).forEach(d => {
-      labels.push(d.name || `設備${d.id}`);
-      if (d.bootTime && (d.ratio != null)) {
-        const hrs = hoursBetween(d.bootTime, now) * Number(d.ratio || 1);
-        values.push(Math.max(0, Math.round(hrs)));
-      } else {
-        values.push(0);
-      }
-    });
+// 取代：renderRuntimeChart（近 30 天估算運行時數）
+const renderRuntimeChart = async () => {
+  const ctx = ensureReportCanvas();
+  // 先嘗試 /devices，失敗再用 /devices/status（沒有 bootTime 的會顯示 0）
+  const { data: devices } = await apiFetch(`${API_BASE}`, { method: 'GET' }).catch(async () => {
+    const fb = await apiFetch(`${API_BASE}/status`, { method: 'GET' });
+    return { data: (fb.data || []).map(d => ({ ...d, bootTime: null, ratio: null })) };
+  });
 
-    destroyChartIfAny();
-    currentChart = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{ label: '估算運行時數(小時)', data: values }],
-      },
-      options: {
-        responsive: true,
-        plugins: { legend: { display: true }, title: { display: false } },
-        scales: { y: { beginAtZero: true } },
-      },
-    });
-  };
+  const now = new Date();
+  const day30Ago = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
 
-  // 2) 設備狀態分布
-  const renderStatusPie = async () => {
-    const ctx = ensureReportCanvas();
-    const { data: statuses } = await apiFetch(`${API_BASE}/status`, { method: 'GET' });
-    const counts = { '1': 0, '2': 0, '3': 0 };
-    (statuses || []).forEach(s => counts[s.status] = (counts[s.status] || 0) + 1);
+  const labels = [];
+  const values = [];
 
-    destroyChartIfAny();
-    currentChart = new Chart(ctx, {
-      type: 'pie',
-      data: {
-        labels: ['正常運行', '維護中', '故障'],
-        datasets: [{ data: [counts['1'] || 0, counts['2'] || 0, counts['3'] || 0] }],
-      },
-      options: { responsive: true }
-    });
-  };
+  (devices || []).forEach(d => {
+    labels.push(d.name || `設備${d.id}`);
+    if (d.bootTime) {
+      // ratio 可能是 0~1 或 0~100，統一成 0~1
+      let r = Number(d.ratio ?? 1);
+      if (r > 1) r = r / 100;
 
-  // 3) 維護紀錄次數統計（依設備彙總）
-  const renderMaintenanceCount = async () => {
-    const ctx = ensureReportCanvas();
-    const { data: history } = await apiFetch(`${API_BASE}/maintenance-history`, { method: 'GET' });
-    const countByDevice = {};
-    (history || []).forEach(r => {
-      const key = `${r.deviceId}::${r.deviceName}`;
-      countByDevice[key] = (countByDevice[key] || 0) + 1;
-    });
-    const labels = Object.keys(countByDevice).map(k => k.split('::')[1] || k);
-    const values = Object.values(countByDevice);
-
-    destroyChartIfAny();
-    currentChart = new Chart(ctx, {
-      type: 'bar',
-      data: { labels, datasets: [{ label: '維護次數', data: values }] },
-      options: { responsive: true, scales: { y: { beginAtZero: true } } }
-    });
-  };
-
-  // 4) 平均運行時間與預測維護（簡易近似：相鄰維護記錄的平均間隔）
-  const renderPrediction = async () => {
-    const ctx = ensureReportCanvas();
-    const { data: history } = await apiFetch(`${API_BASE}/maintenance-history`, { method: 'GET' });
-
-    // 依設備分組並按時間排序
-    const byDevice = {};
-    (history || []).forEach(r => {
-      const key = `${r.deviceId}::${r.deviceName}`;
-      byDevice[key] = byDevice[key] || [];
-      byDevice[key].push(r);
-    });
-    Object.values(byDevice).forEach(list => list.sort((a,b) => new Date(a.recordEndTime) - new Date(b.recordEndTime)));
-
-    const labels = [];
-    const avgDays = [];
-    const nextDays = [];
-
-    for (const key of Object.keys(byDevice)) {
-      const [id, name] = key.split('::');
-      const list = byDevice[key];
-      const gaps = [];
-      for (let i = 1; i < list.length; i++) {
-        const gapHrs = hoursBetween(list[i-1].recordEndTime || list[i-1].recordCreateTime, list[i].recordEndTime || list[i].recordCreateTime);
-        gaps.push(gapHrs / 24);
-      }
-      const avg = gaps.length ? (gaps.reduce((a,b)=>a+b,0) / gaps.length) : 0;
-      labels.push(name || `設備${id}`);
-      avgDays.push(Number(avg.toFixed(1)));
-
-      // 預測下一次 = 最後一次結束時間 + 平均間隔
-      let nextGap = avg || 0;
-      nextDays.push(Number(nextGap.toFixed(1)));
+      const start = new Date(d.bootTime) > day30Ago ? new Date(d.bootTime) : day30Ago;
+      const hrs = hoursBetween(start, now) * (isNaN(r) ? 1 : r);
+      values.push(Math.max(0, Number(hrs.toFixed(1))));
+    } else {
+      values.push(0);
     }
+  });
 
-    destroyChartIfAny();
-    currentChart = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          { label: '平均維護間隔(天)', data: avgDays },
-          { label: '預測下次維護間隔(天)', data: nextDays },
-        ]
+  destroyChartIfAny();
+  currentChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: '近30天估算運行時數（小時）',
+        data: values,
+        backgroundColor: COLORS.blue
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: baseLayout,
+      plugins: {
+        ...basePlugins,
+        tooltip: {
+          callbacks: { label: (c) => `${c.dataset.label}: ${c.formattedValue} 小時` }
+        }
       },
-      options: { responsive: true, scales: { y: { beginAtZero: true } } }
-    });
-  };
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { precision: 0 },   // 讓刻度是整數
+          title: { display: true, text: '小時' }
+        },
+        x: { ticks: { autoSkip: true, maxRotation: 0, minRotation: 0 } }
+      }
+    }
+  });
+};
+
+// 取代：renderStatusPie（固定綠/黃/紅、顯示百分比）
+const renderStatusPie = async () => {
+  const ctx = ensureReportCanvas();
+  const { data: statuses } = await apiFetch(`${API_BASE}/status`, { method: 'GET' });
+  const counts = { '1': 0, '2': 0, '3': 0 };
+  (statuses || []).forEach(s => counts[s.status] = (counts[s.status] || 0) + 1);
+  const total = (counts['1'] || 0) + (counts['2'] || 0) + (counts['3'] || 0) || 1;
+
+  destroyChartIfAny();
+  currentChart = new Chart(ctx, {
+    type: 'pie',
+    data: {
+      labels: ['正常運行', '維護中', '故障'],
+      datasets: [{
+        data: [counts['1'] || 0, counts['2'] || 0, counts['3'] || 0],
+        backgroundColor: [COLORS.ok, COLORS.warn, COLORS.err],
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: baseLayout,
+      plugins: {
+        ...basePlugins,
+        tooltip: {
+          callbacks: {
+            label: (c) => {
+              const val = c.raw || 0;
+              const pct = ((val / total) * 100).toFixed(1);
+              return `${c.label}: ${val}（${pct}%）`;
+            }
+          }
+        }
+      }
+    }
+  });
+};
+
+// 取代：renderMaintenanceCount（依維護次數排序、版面友善）
+const renderMaintenanceCount = async () => {
+  const ctx = ensureReportCanvas();
+  const { data: history } = await apiFetch(`${API_BASE}/maintenance-history`, { method: 'GET' });
+  const countByDevice = {};
+  (history || []).forEach(r => {
+    const key = `${r.deviceId}::${r.deviceName || `設備${r.deviceId}`}`;
+    countByDevice[key] = (countByDevice[key] || 0) + 1;
+  });
+
+  // 依次數排序（多到少）
+  const entries = Object.entries(countByDevice).sort((a, b) => b[1] - a[1]);
+  const labels = entries.map(e => e[0].split('::')[1]);
+  const values = entries.map(e => e[1]);
+
+  destroyChartIfAny();
+  currentChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: '維護次數',
+        data: values,
+        backgroundColor: COLORS.gray
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: baseLayout,
+      plugins: { ...basePlugins },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: '次' } },
+        x: { ticks: { autoSkip: true, maxRotation: 0, minRotation: 0 } }
+      }
+    }
+  });
+};
+
+// 取代：renderPrediction（平均天數＋推估天數，刻度從 0 起）
+const renderPrediction = async () => {
+  const ctx = ensureReportCanvas();
+  const { data: history } = await apiFetch(`${API_BASE}/maintenance-history`, { method: 'GET' });
+
+  // 依設備分組並按時間排序
+  const byDevice = {};
+  (history || []).forEach(r => {
+    const key = `${r.deviceId}::${r.deviceName || `設備${r.deviceId}`}`;
+    (byDevice[key] ||= []).push(r);
+  });
+  Object.values(byDevice).forEach(list =>
+    list.sort((a, b) => new Date(a.recordEndTime || a.recordCreateTime) - new Date(b.recordEndTime || b.recordCreateTime))
+  );
+
+  const labels = [];
+  const avgDays = [];
+  const nextDays = [];
+
+  for (const key of Object.keys(byDevice)) {
+    const [, name] = key.split('::');
+    const list = byDevice[key];
+    const gaps = [];
+    for (let i = 1; i < list.length; i++) {
+      const prev = list[i - 1];
+      const curr = list[i];
+      const gapHrs = hoursBetween(prev.recordEndTime || prev.recordCreateTime, curr.recordEndTime || curr.recordCreateTime);
+      gaps.push(gapHrs / 24);
+    }
+    const avg = gaps.length ? (gaps.reduce((a, b) => a + b, 0) / gaps.length) : 0;
+    labels.push(name);
+    avgDays.push(Number(avg.toFixed(1)));
+    // 簡易預測：用平均間隔
+    nextDays.push(Number((avg || 0).toFixed(1)));
+  }
+
+  destroyChartIfAny();
+  currentChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: '平均維護間隔（天）', data: avgDays, backgroundColor: COLORS.blue },
+        { label: '預測下次間隔（天）', data: nextDays, backgroundColor: COLORS.warn }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: baseLayout,
+      plugins: { ...basePlugins },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: '天' } },
+        x: { ticks: { autoSkip: true, maxRotation: 0, minRotation: 0 } }
+      }
+    }
+  });
+};
+
 
   const renderReport = async () => {
     try {

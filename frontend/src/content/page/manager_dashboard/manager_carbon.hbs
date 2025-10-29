@@ -10,6 +10,91 @@
 {{#*inline "head-block"}}
 <link rel="stylesheet" media="screen, print" href="css/statistics/chartjs/chartjs.css">
 <link rel="stylesheet" media="screen, print" href="css/miscellaneous/fullcalendar/fullcalendar.bundle.css">
+<style>
+/* 修復碳排放熱點分析面板的響應式布局問題 */
+#panel-2 .panel-hdr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0; /* 允許 flex 子元素收縮 */
+}
+
+#panel-2 .panel-hdr > h2 {
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+/* 確保日期選擇器區域可以正確換行 */
+#panel-2 .panel-hdr #mgrRangeInline {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+/* 日期選擇器表單區域在窄螢幕時換行顯示 */
+#panel-2 .panel-hdr #mgrRangeInline .form-inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* 在小螢幕時優化日期輸入框和按鈕 */
+@media (max-width: 991.98px) {
+    #panel-2 .panel-hdr {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    #panel-2 .panel-hdr > h2 {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+    
+    #panel-2 .panel-hdr #mgrRangeInline {
+        width: 100%;
+        justify-content: flex-start;
+        margin-left: 0 !important;
+    }
+    
+    #panel-2 .panel-hdr #mgrRangeInline .form-inline {
+        flex-wrap: wrap;
+    }
+    
+    #panel-2 .panel-hdr .panel-toolbar {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+    }
+}
+
+/* 在更小的螢幕上優化日期輸入 */
+@media (max-width: 575.98px) {
+    #panel-2 .panel-hdr #mgrRangeInline .form-inline input[type="date"] {
+        max-width: 140px;
+        font-size: 0.875rem;
+    }
+    
+    #panel-2 .panel-hdr #mgrRangeInline .form-inline .btn-sm {
+        font-size: 0.8rem;
+        padding: 0.25rem 0.75rem;
+    }
+}
+
+/* 確保標題永遠不會垂直排列 */
+#panel-2 .panel-hdr > h2 {
+    word-break: keep-all;
+    overflow-wrap: normal;
+    writing-mode: horizontal-tb;
+    text-orientation: mixed;
+}
+</style>
 {{/inline}}
 
 {{#*inline "content-block"}}

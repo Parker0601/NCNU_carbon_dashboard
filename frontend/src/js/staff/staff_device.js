@@ -187,43 +187,53 @@
   };
 
   // ========= 維護歷史 =========
+  const renderHistoryModal = (deviceId, deviceName, list) => {
+    // 僅顯示已完成（有 end_time）的紀錄
+    const completed = (list || []).filter(r => !!r.recordEndTime);
+    const rows = completed.map(r => `
+      <tr>
+        <td>${fmtDateTime(r.recordCreateTime)}</td>
+        <td>${fmtDateTime(r.recordEndTime)}</td>
+        <td>${r.userName || '-'}</td>
+        <td>${r.recordDescription || '-'}</td>
+      </tr>
+    `).join('');
+
+    Swal.fire({
+      width: 900,
+      title: `維護歷史 - ${deviceName} (ID: ${deviceId})`,
+      html: `
+        <div class="table-responsive text-left">
+          <table class="table table-sm table-striped">
+            <thead>
+              <tr>
+                <th>建立時間</th>
+                <th>結束時間</th>
+                <th>維修人員</th>
+                <th>描述</th>
+              </tr>
+            </thead>
+            <tbody>${rows || `<tr><td colspan="4" class="text-center text-muted">目前沒有已完成的維護紀錄</td></tr>`}</tbody>
+          </table>
+        </div>
+      `,
+      showConfirmButton: true,
+      confirmButtonText: '關閉',
+    });
+  };
+
   const showDeviceMaintenanceHistory = async (deviceId, deviceName) => {
     try {
       const resp = await apiFetch(`${API_BASE}/${deviceId}/maintenance`, { method: 'GET' });
-      const rows = (resp.data || []).map(r => `
-        <tr>
-          <td>${fmtDateTime(r.recordCreateTime)}</td>
-          <td>${fmtDateTime(r.recordEndTime)}</td>
-          <td>${r.userName || '-'}</td>
-          <td>${r.recordDescription || '-'}</td>
-          <td><span class="badge ${ (statusMap[r.deviceStatus]?.badge || 'badge-secondary') }">${ statusMap[r.deviceStatus]?.text || r.deviceStatus }</span></td>
-        </tr>
-      `).join('');
-
-      Swal.fire({
-        width: 900,
-        title: `維護歷史 - ${deviceName} (ID: ${deviceId})`,
-        html: `
-          <div class="table-responsive text-left">
-            <table class="table table-sm table-striped">
-              <thead>
-                <tr>
-                  <th>建立時間</th>
-                  <th>結束時間</th>
-                  <th>維修人員</th>
-                  <th>描述</th>
-                  <th>當時設備狀態</th>
-                </tr>
-              </thead>
-              <tbody>${rows || `<tr><td colspan="5" class="text-center text-muted">尚無紀錄</td></tr>`}</tbody>
-            </table>
-          </div>
-        `,
-        showConfirmButton: true,
-        confirmButtonText: '關閉',
-      });
+      renderHistoryModal(deviceId, deviceName, resp.data || []);
     } catch (err) {
-      toastError(`取得維護歷史失敗：${err.message}`);
+      const msg = (err && err.message) ? String(err.message) : '';
+      // 若後端回 404（此設備尚無維護紀錄），仍顯示空表格 modal
+      if (/404/.test(msg) || /No maintenance history/i.test(msg)) {
+        renderHistoryModal(deviceId, deviceName, []);
+        return;
+      }
+      toastError(`取得維護歷史失敗：${msg}`);
     }
   };
 

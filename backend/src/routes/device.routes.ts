@@ -192,7 +192,7 @@ router.post('/maintenance', async (req: Request, res: Response) => {
       .values({
         issueId: issueId,
         userId: req.user.id,
-        description,
+        employeeDescription: description,
         createTime: new Date(),
         endTime: new Date(endTime)
       })
@@ -202,7 +202,7 @@ router.post('/maintenance', async (req: Request, res: Response) => {
       recordId: newMaintenance.id,
       deviceId: deviceId,
       name,
-      description: newMaintenance.description,
+      description: newMaintenance.employeeDescription,
       createTime: newMaintenance.createTime,
       endTime: newMaintenance.endTime,
       // 新增維修員工資訊
@@ -238,7 +238,7 @@ router.get('/maintenance-history', async (_req: Request, res: Response) => {
         runTime: devices.bootTime,
         // Record 資訊
         recordId: maintenanceRecords.id,
-        recordDescription: maintenanceRecords.description,
+        recordDescription: maintenanceRecords.employeeDescription,
         recordCreateTime: maintenanceRecords.createTime,
         recordEndTime: maintenanceRecords.endTime,
         // User 資訊
@@ -273,7 +273,7 @@ router.get('/:id/maintenance', async (req: Request, res: Response) => {
         runTime: devices.bootTime,
         // Record 資訊
         recordId: maintenanceRecords.id,
-        recordDescription: maintenanceRecords.description,
+        recordDescription: maintenanceRecords.employeeDescription,
         recordCreateTime: maintenanceRecords.createTime,
         recordEndTime: maintenanceRecords.endTime,
         // User 資訊

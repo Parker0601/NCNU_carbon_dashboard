@@ -801,12 +801,35 @@ router.patch('/review/:scheduleId', requireAdmin, async (req: Request, res: Resp
       .where(eq(schedule.id, scheduleId))
       .returning();
 
-    // 如果是退回，需要將員工狀態改回 busy（重新處理）
+    // 如果是退回，需要將員工狀態改回 busy（重新處理），並新增一筆 maintenance record
     if (action === 'reject') {
       await db
         .update(users)
         .set({ status: 'busy' })
         .where(eq(users.id, existingSchedule.userId));
+      
+      // 尋找對應的 issue 並新增一筆維修記錄
+      if (existingSchedule.deviceId) {
+        const [relatedIssue] = await db
+          .select({ id: issues.id })
+          .from(issues)
+          .where(and(
+            eq(issues.deviceId, existingSchedule.deviceId),
+            eq(issues.assigner, existingSchedule.userId)
+          ))
+          .orderBy(desc(issues.createTime))
+          .limit(1);
+
+        if (relatedIssue) {
+          await db
+            .insert(maintenanceRecords)
+            .values({
+              issueId: relatedIssue.id,
+              userId: existingSchedule.userId,
+              createTime: new Date()
+            });
+        }
+      }
     }
 
     // 如果是審核通過，更新對應的 issue 狀態為已解決

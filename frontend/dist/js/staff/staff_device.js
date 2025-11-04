@@ -165,7 +165,7 @@
         `<option value="${device.id}">${device.name || `設備#${device.id}`}</option>`
       ).join('');
       $maintenanceDeviceSelector.innerHTML =
-        '<option value="">選擇設備查看維護紀錄</option>' + options;
+        '<option value="">所有機台</option>' + options;
     } catch (err) {
       toastError(`載入設備清單失敗：${err.message}`);
     }

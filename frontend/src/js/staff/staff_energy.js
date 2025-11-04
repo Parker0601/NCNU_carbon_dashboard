@@ -1242,6 +1242,17 @@
       // 重新載入圖表
       await renderCarbonEmissionChart(currentChartRange || 'week');
 
+      // 提交成功後：將剛輸入的數字全部歸 0，並顯示成功提示
+      $('.fuel-input').val('');
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          icon: 'success',
+          title: '提交成功',
+          timer: 1500,
+          showConfirmButton: false
+        });
+      }
+
     } catch (error) {
       console.error('❌ 提交能源消耗資料失敗:', error);
     }
@@ -1281,4 +1292,13 @@
         loadAllFuelTabs();
       }
     });
+
+    // 禁用在數字欄位上用滑鼠滾輪調整數值
+    const disableWheelOnNumber = function(e) {
+      e.preventDefault();
+      this.blur();
+    };
+    $(document).on('wheel', '.fuel-input', disableWheelOnNumber);
+    $(document).on('mousewheel', '.fuel-input', disableWheelOnNumber);
+    $(document).on('DOMMouseScroll', '.fuel-input', disableWheelOnNumber);
   });

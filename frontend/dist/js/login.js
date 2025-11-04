@@ -92,7 +92,7 @@
     } catch (err) {
       console.error(err);
       $('#login-info')
-        .html('<strong>登入失敗！</strong> ' + (err.message || '請稍後再試'))
+        .html('<strong>登入失敗！</strong> ')
         .removeClass('alert-success')
         .addClass('alert-danger')
         .show();

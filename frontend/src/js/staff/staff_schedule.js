@@ -384,8 +384,8 @@ $(document).ready(async function () {
 
   // 列表操作：接受任務（PATCH /api/schedule/accept-task/:scheduleId）
   $(document).on('click', '.btn-accept-task', async function () {
-    const eventId = $(this).data('id'); // e.g. "S-12"
-    const sid = extractScheduleId(String(eventId));
+    const eventId = $(this).data('id');          // e.g. "S-12"
+    const sid = extractScheduleId(String(eventId)); // 解析出 12
     if (!sid) {
       return Swal.fire({ icon: 'error', title: '無法辨識任務', text: `事件編號 ${eventId} 格式不正確` });
     }
@@ -426,6 +426,10 @@ $(document).ready(async function () {
     const id = $(this).data('id');
     const task = currentSchedule.find(x => x.id === String(id));
     if (!task) return;
+    const sid = extractScheduleId(task.id); // "S-12" -> 12
+    if (!sid) {
+      return Swal.fire({ icon: 'error', title: '無法辨識任務', text: `事件編號 ${task.id} 格式不正確` });
+    }
 
     // 取得當前時間戳
     const now = new Date();
@@ -482,17 +486,14 @@ $(document).ready(async function () {
 
     try {
       // 呼叫後端：提交維修（寫入 maintenance_records.employee_description 並結束當前維修）
-      const devId = task.deviceId;
-      if (devId) {
-        await fetchJSON(`${API_BASE}/schedule/maintenance`, {
-          method: 'POST',
-          body: JSON.stringify({
-            deviceId: Number(devId),
-            employee_description: result.value.description,
-            endTime: new Date().toISOString()
-          })
-        });
-      }
+      await fetchJSON(`${API_BASE}/schedule/maintenance`, {
+        method: 'POST',
+        body: JSON.stringify({
+          deviceId: Number(task.deviceId),
+          employee_description: result.value.description,
+          endTime: new Date().toISOString()
+        })
+      });
 
       // 成功後重載我的任務並刷新畫面
       await loadMyTasks();

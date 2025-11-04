@@ -441,22 +441,17 @@ router.post('/maintenance', async (req: Request, res: Response) => {
     const maintenanceSchema = z.object({
       deviceId: z.number().int().positive(),
       employee_description: z.string().min(1),
-      endTime: z.string()
+      endTime: z.string() // ISO 字串
     });
 
     const { deviceId, employee_description, endTime } = maintenanceSchema.parse(req.body);
+    const endAt = new Date(endTime);
 
-    // 檢查設備是否存在
-    const [device] = await db
-      .select()
-      .from(devices)
-      .where(eq(devices.id, deviceId));
+    // 1) 檢查設備是否存在
+    const [device] = await db.select().from(devices).where(eq(devices.id, deviceId));
+    if (!device) return notFoundResponse(res, 'Device not found');
 
-    if (!device) {
-      return notFoundResponse(res, 'Device not found');
-    }
-
-    // 檢查是否有相關的 issue
+    // 2) 檢查是否有相關 issue（沿用你原本的條件）
     const [existingIssue] = await db
       .select()
       .from(issues)
@@ -467,12 +462,12 @@ router.post('/maintenance', async (req: Request, res: Response) => {
       return errorResponse(res, 'No assigned issue found for this device', 400);
     }
 
-    // 更新既有的維修記錄（在指派時建立），補上員工描述與結束時間
-    const [updatedMaintenance] = await db
+    // 3) 嘗試更新「尚未結束」的維修紀錄（原本邏輯）
+    let [record] = await db
       .update(maintenanceRecords)
       .set({
         employeeDescription: employee_description,
-        endTime: new Date(endTime)
+        endTime: endAt
       })
       .where(and(
         eq(maintenanceRecords.issueId, existingIssue.id),
@@ -482,35 +477,56 @@ router.post('/maintenance', async (req: Request, res: Response) => {
       ))
       .returning();
 
-    if (!updatedMaintenance) {
-      return errorResponse(res, 'No pending maintenance record to update', 400);
+    // 4) 如果沒有 pending → 自動建立一筆，再補上描述與結束時間（方案 B）
+    if (!record) {
+      // ⚠️ 欄位名稱請跟你的 schema 完全一致：
+      // 如果 schema 是 issue_id/user_id/create_time，用 snake_case；如果是 issueId/userId/createTime，用 camelCase
+      const [created] = await db
+        .insert(maintenanceRecords)
+        .values({
+          // 必填：createTime（否則就會出現你現在的 No overload / missing createTime）
+          createTime: new Date(),
+          // 這兩個名稱請對齊 schema：issueId / userId（或 issue_id / user_id）
+          issueId: existingIssue.id,
+          userId: req.user.id,
+          // pending 先不結束：endTime 為 null
+          endTime: null,
+          // 描述可先留空（nullable），或直接先寫
+          employeeDescription: null
+        })
+        .returning();
+
+      // 再把剛建立的那筆補上描述與結束時間（正式「申請/結案」）
+      const [afterUpdate] = await db
+        .update(maintenanceRecords)
+        .set({
+          employeeDescription: employee_description,
+          endTime: endAt
+        })
+        .where(eq(maintenanceRecords.id, created.id))
+        .returning();
+
+      record = afterUpdate || created;
     }
 
-    // 不更新 issue 狀態，等主管審核通過後才更新
+    // 5)（保持你原本行為）更新員工狀態
+    await db.update(users).set({ status: 'idle' }).where(eq(users.id, req.user.id));
 
-    // 更新員工狀態為空閒
-    await db
-      .update(users)
-      .set({ status: 'idle' })
-      .where(eq(users.id, req.user.id));
-
-    // 更新相關的 schedule 狀態和結束時間
+    // 6) 更新相關的 schedule 為 submitted 並寫入結束時間
     await db
       .update(schedule)
-      .set({ 
-        status: 'submitted',
-        endTime: new Date(endTime) // 設定為維修結束時間
-      })
+      .set({ status: 'submitted', endTime: endAt })
       .where(and(eq(schedule.userId, req.user.id), eq(schedule.deviceId, deviceId)));
 
     return successResponse(res, {
-      maintenanceId: updatedMaintenance.id,
+      maintenanceId: record.id,
       deviceId,
-      employeeDescription: updatedMaintenance.employeeDescription,
-      createTime: updatedMaintenance.createTime,
-      endTime: updatedMaintenance.endTime,
+      employeeDescription: record.employeeDescription,
+      createTime: record.createTime,
+      endTime: record.endTime,
       message: 'Maintenance record updated successfully'
     }, 'Maintenance record updated successfully', 200);
+
   } catch (error) {
     if (error instanceof z.ZodError) {
       return errorResponse(res, error.issues.map(i => i.message).join('; '), 400);

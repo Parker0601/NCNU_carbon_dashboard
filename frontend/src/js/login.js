@@ -22,6 +22,14 @@
     $('#js-login').trigger('submit');
   });
 
+  // 於表單內按下 Enter 時觸發登入
+  $('#js-login').on('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      $('#js-login').trigger('submit');
+    }
+  });
+
   async function onLoginSubmit(event) {
     event.preventDefault();
 

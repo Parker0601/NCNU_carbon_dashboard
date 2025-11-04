@@ -9257,6 +9257,23 @@ body:not(.mobile-detected).modal-open .modal::-webkit-scrollbar-thumb:vertical:h
   color: #cccccc;
 }
 
+/* 小標題樣式：與 SmartAdmin .nav-title 同款設計 */
+.nav-section-title {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 15px 15px 5px 15px; /* ✅ 與 "員工專區" 完全對齊 */
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  pointer-events: none;
+}
+
+/* 額外讓小標題與前一項隔開（可選） */
+.nav-section-title:not(:first-child) {
+  margin-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-top: 12px;
+}
+
 @media print {
   @page {
     size: letter portrait;

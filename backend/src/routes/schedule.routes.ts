@@ -438,31 +438,59 @@ router.post('/maintenance', async (req: Request, res: Response) => {
       return errorResponse(res, 'User not authenticated', 401);
     }
 
+    // 1) 驗證輸入：一定要有 scheduleId
     const maintenanceSchema = z.object({
+      scheduleId: z.number().int().positive(),
       deviceId: z.number().int().positive(),
       employee_description: z.string().min(1),
       endTime: z.string() // ISO 字串
     });
 
-    const { deviceId, employee_description, endTime } = maintenanceSchema.parse(req.body);
-    const endAt = new Date(endTime);
+    const { scheduleId, deviceId, employee_description, endTime } =
+      maintenanceSchema.parse(req.body);
 
-    // 1) 檢查設備是否存在
+    const endAt = new Date(endTime);
+    if (isNaN(+endAt)) {
+      return errorResponse(res, 'Invalid endTime', 400);
+    }
+
+    // 2) 檢查設備是否存在
     const [device] = await db.select().from(devices).where(eq(devices.id, deviceId));
     if (!device) return notFoundResponse(res, 'Device not found');
 
-    // 2) 檢查是否有相關 issue（沿用你原本的條件）
+    // 3) 檢查這一筆 schedule 是否存在、屬於該員工，且對應同一台設備
+    const [sched] = await db
+      .select()
+      .from(schedule)
+      .where(eq(schedule.id, scheduleId))
+      .limit(1);
+
+    if (!sched) {
+      return notFoundResponse(res, 'Schedule not found');
+    }
+    if (sched.userId !== req.user.id) {
+      return errorResponse(res, 'Schedule not assigned to you', 403);
+    }
+    if (sched.deviceId !== deviceId) {
+      return errorResponse(res, 'Device mismatch with schedule', 400);
+    }
+    if (!['accepted', 'assigned', 'rejected'].includes(sched.status)) {
+      return errorResponse(res, 'Schedule status is not applicable for submission', 400);
+    }
+
+    // 4) 找到對應的 issue（同裝置 + 同指派者 = 這位員工）
     const [existingIssue] = await db
       .select()
       .from(issues)
       .where(and(eq(issues.deviceId, deviceId), eq(issues.assigner, req.user.id)))
+      .orderBy(desc(issues.createTime))
       .limit(1);
 
     if (!existingIssue) {
       return errorResponse(res, 'No assigned issue found for this device', 400);
     }
 
-    // 3) 嘗試更新「尚未結束」的維修紀錄（原本邏輯）
+    // 5) 嘗試更新「尚未結束」的維修紀錄；若沒有則建立一筆再補資料
     let [record] = await db
       .update(maintenanceRecords)
       .set({
@@ -472,31 +500,22 @@ router.post('/maintenance', async (req: Request, res: Response) => {
       .where(and(
         eq(maintenanceRecords.issueId, existingIssue.id),
         eq(maintenanceRecords.userId, req.user.id),
-        // 僅更新尚未結束的那一筆
         sql`${maintenanceRecords.endTime} IS NULL`
       ))
       .returning();
 
-    // 4) 如果沒有 pending → 自動建立一筆，再補上描述與結束時間（方案 B）
     if (!record) {
-      // ⚠️ 欄位名稱請跟你的 schema 完全一致：
-      // 如果 schema 是 issue_id/user_id/create_time，用 snake_case；如果是 issueId/userId/createTime，用 camelCase
       const [created] = await db
         .insert(maintenanceRecords)
         .values({
-          // 必填：createTime（否則就會出現你現在的 No overload / missing createTime）
           createTime: new Date(),
-          // 這兩個名稱請對齊 schema：issueId / userId（或 issue_id / user_id）
           issueId: existingIssue.id,
           userId: req.user.id,
-          // pending 先不結束：endTime 為 null
           endTime: null,
-          // 描述可先留空（nullable），或直接先寫
           employeeDescription: null
         })
         .returning();
 
-      // 再把剛建立的那筆補上描述與結束時間（正式「申請/結案」）
       const [afterUpdate] = await db
         .update(maintenanceRecords)
         .set({
@@ -509,17 +528,18 @@ router.post('/maintenance', async (req: Request, res: Response) => {
       record = afterUpdate || created;
     }
 
-    // 5)（保持你原本行為）更新員工狀態
+    // 6) 更新員工狀態
     await db.update(users).set({ status: 'idle' }).where(eq(users.id, req.user.id));
 
-    // 6) 更新相關的 schedule 為 submitted 並寫入結束時間
+    // 7) ★ 只更新「這一筆」 schedule 成 submitted，並寫入結束時間（關鍵修正）
     await db
       .update(schedule)
       .set({ status: 'submitted', endTime: endAt })
-      .where(and(eq(schedule.userId, req.user.id), eq(schedule.deviceId, deviceId)));
+      .where(eq(schedule.id, scheduleId));
 
     return successResponse(res, {
       maintenanceId: record.id,
+      scheduleId,
       deviceId,
       employeeDescription: record.employeeDescription,
       createTime: record.createTime,
@@ -631,7 +651,8 @@ router.get('/manager-view', requireAdmin, async (req: Request, res: Response) =>
         endTime: schedule.endTime,
         status: schedule.status,
         userName: users.name,
-        deviceName: devices.name
+        deviceName: devices.name,
+        deviceId: schedule.deviceId,
       })
       .from(schedule)
       .leftJoin(users, eq(schedule.userId, users.id))
@@ -859,6 +880,10 @@ router.patch('/review/:scheduleId', requireAdmin, async (req: Request, res: Resp
           eq(issues.assigner, existingSchedule.userId),
           eq(issues.status, '2') // 只更新處理中的 issue
         ));
+      await db
+        .update(devices)
+        .set({ status: '1' })
+        .where(eq(devices.id, existingSchedule.deviceId));
     }
 
     return successResponse(res, {

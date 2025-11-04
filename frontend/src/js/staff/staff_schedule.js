@@ -153,20 +153,6 @@ function normalizeTasks(apiData) {
 
   for (const i of issues) {
     const stxt = statusText(i.status || 'assigned');
-    out.push({
-      type: 'issue',
-      id: `I-${i.issueId}`,
-      title: `[問題] ${i.deviceName || ('設備#' + (i.deviceId ?? ''))}`,
-      desc: i.description || '',
-      deviceName: i.deviceName || '',
-      start: i.createTime || null,
-      end: null,
-      owner: '自己',
-      statusText: stxt,
-      rawStatus: i.status || 'assigned',
-      returned: String(i.status).toLowerCase() === 'rejected',
-      rejectReason: i.rejectReason || undefined
-    });
   }
 
   out.sort((a,b) => {
@@ -489,6 +475,7 @@ $(document).ready(async function () {
       await fetchJSON(`${API_BASE}/schedule/maintenance`, {
         method: 'POST',
         body: JSON.stringify({
+          scheduleId: sid,
           deviceId: Number(task.deviceId),
           employee_description: result.value.description,
           endTime: new Date().toISOString()

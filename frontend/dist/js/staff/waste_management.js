@@ -267,9 +267,6 @@ function renderCards() {
                 <div class="small text-muted">${cardData.lastInputAt}</div>
               </div>
             </div>
-            <div class="progress mb-3" style="height:8px;">
-              <div class="progress-bar" role="progressbar" style="width: ${cardData.utilPercent}%;" aria-valuenow="${cardData.utilPercent}" aria-valuemin="0" aria-valuemax="100"></div>
-            </div>
             <div class="d-flex justify-content-end">
               <button class="btn btn-sm btn-primary btn-fill-input" data-device-id="${cardData.deviceId}">填寫入料資訊</button>
             </div>

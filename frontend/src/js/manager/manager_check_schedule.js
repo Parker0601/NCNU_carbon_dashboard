@@ -8,7 +8,8 @@ $(document).ready(function () {
     // 取得審核頁資料（建議回傳當週 schedules，已 join user/device/issue）
     list: (from, to) => `${API_ROOT}/schedule/manager-view?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     // 主管審核：approve / return
-    review: (scheduleId) => `${API_ROOT}/schedule/review/${scheduleId}`
+    review: (scheduleId) => `${API_ROOT}/schedule/review/${scheduleId}`,
+    deviceSetStatus: (deviceId) => `${API_ROOT}/devices/${deviceId}/status`
   };
 
   async function apiFetch(url, { method = 'GET', body, headers = {} } = {}) {
@@ -101,7 +102,8 @@ function statusLabel(s) {
       owner: e.ownerName || e.userName || e.owner || '-',
       status: e.status,               // 原始狀態（submitted/approved/returned）
       desc: e.description || e.desc || '',
-      rejectReason: e.rejectReason || e.managerNote || ''
+      rejectReason: e.rejectReason || e.managerNote || '',
+      deviceId: e.deviceId || e.device?.id || e.issue?.deviceId || null
     }));
     currentSchedule = applyVisibilityFilter(mapped);
     return currentSchedule;
@@ -152,6 +154,17 @@ function statusLabel(s) {
   // ====== 審核動作 API ======
   async function approveTask(id) {
     await apiFetch(ROUTES.review(id), { method: 'PATCH', body: { action: 'approve' } });
+    const approved = currentSchedule.find(x => String(x.id) === String(id));
+    if (approved?.deviceId) {
+      try {
+        await apiFetch(ROUTES.deviceSetStatus(approved.deviceId), {
+          method: 'PUT',
+          body: { status: '1' }   // 1 = 正常運行
+        });
+      } catch (e) {
+        console.warn('設備狀態更新失敗（不阻擋前端流程）:', e);
+      }
+    }
     // 本地移除
     currentSchedule = currentSchedule.filter(x => String(x.id) !== String(id));
     currentSchedule = applyVisibilityFilter(currentSchedule);

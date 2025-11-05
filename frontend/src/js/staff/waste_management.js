@@ -11,6 +11,23 @@ const WASTE_INPUT_PAGE = (deviceId) =>
   `${PAGES_BASE}/waste_input?deviceId=${encodeURIComponent(deviceId)}`;
 const MY_SCRAPS_PAGE = () => `${PAGES_BASE}/my_scraps`;
 
+// ===== 版面/格式小工具 =====
+const nf0 = new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 0 });
+const nf2 = new Intl.NumberFormat('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function fmtKg(x, digits = 2) {
+  return (digits === 0 ? nf0 : nf2).format(Number(x) || 0) + ' kg';
+}
+
+function statusBadge(status) {
+  const s = String(status);
+  if (s === '1') return { text: '正常運行',  cls: 'badge-success', icon: 'fa-check-circle' };
+  if (s === '2') return { text: '維護中',    cls: 'badge-warning', icon: 'fa-tools' };
+  if (s === '3') return { text: '故障',      cls: 'badge-danger',  icon: 'fa-exclamation-triangle' };
+  return { text: '未知', cls: 'badge-secondary', icon: 'fa-question-circle' };
+}
+
+
 // ====================================================
 // 小工具
 // ====================================================
@@ -246,33 +263,75 @@ function renderCards() {
     } else {
       const col = document.createElement('div');
       col.className = 'col-xl-4 col-lg-6 col-md-6';
-      col.innerHTML = `
-        <div class="card mb-3">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <div>
-              <h5 class="card-title mb-0">${escapeHtml(cardData.deviceName)}</h5>
-              <small class="text-muted">設備代碼：${escapeHtml(cardData.deviceCode)}</small>
-            </div>
-            <span class="badge ${cardData.statusClass}">${cardData.statusText}</span>
-          </div>
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <div>
-                <div class="text-muted small">近30筆入料總量</div>
-                <div class="font-weight-bold">${cardData.recentTotal} kg</div>
-              </div>
-              <div class="text-right">
-                <div class="text-muted small">最新入料</div>
-                <div class="font-weight-bold">${cardData.lastInputAmount} kg</div>
-                <div class="small text-muted">${cardData.lastInputAt}</div>
-              </div>
-            </div>
-            <div class="d-flex justify-content-end">
-              <button class="btn btn-sm btn-primary btn-fill-input" data-device-id="${cardData.deviceId}">填寫入料資訊</button>
-            </div>
-          </div>
+      const sb = statusBadge(dev.status);
+col.innerHTML = `
+  <div class="card shadow-sm mb-3 h-100">
+    <div class="card-header d-flex justify-content-between align-items-center bg-white">
+      <div class="d-flex align-items-center">
+        <div class="rounded-circle bg-primary-100 d-inline-flex align-items-center justify-content-center mr-2" style="width:36px;height:36px;">
+          <i class="fal fa-recycle text-primary-600"></i>
         </div>
-      `;
+        <div>
+          <h5 class="card-title mb-0">${escapeHtml(cardData.deviceName)}</h5>
+          <small class="text-muted">設備代碼：${escapeHtml(cardData.deviceCode)}</small>
+        </div>
+      </div>
+      <span class="badge ${sb.cls} d-inline-flex align-items-center">
+        <i class="fal ${sb.icon} mr-1"></i>${sb.text}
+      </span>
+    </div>
+
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <div class="text-muted small">近 30 筆入料總量</div>
+          <div class="font-weight-bold">${fmtKg(cardData.recentTotal, 2)}</div>
+        </div>
+        <div class="text-right">
+          <div class="text-muted small">最新入料</div>
+          <div class="font-weight-bold">${fmtKg(cardData.lastInputAmount, 2)}</div>
+          <div class="small text-muted">#${escapeHtml(cardData.lastInputAt)}</div>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <div class="d-flex justify-content-between mb-1">
+          <small class="text-muted">近期使用率（估算）</small>
+          <small class="text-muted">${nf0.format(cardData.utilPercent)}%</small>
+        </div>
+        <div class="progress" style="height:8px;">
+          <div class="progress-bar bg-success" role="progressbar" style="width:${cardData.utilPercent}%"></div>
+        </div>
+      </div>
+
+      <div class="row text-center mb-3">
+        <div class="col-4">
+          <div class="small text-muted">狀態</div>
+          <div class="font-weight-600">${sb.text}</div>
+        </div>
+        <div class="col-4">
+          <div class="small text-muted">總量</div>
+          <div class="font-weight-600">${fmtKg(cardData.recentTotal, 2)}</div>
+        </div>
+        <div class="col-4">
+          <div class="small text-muted">最新</div>
+          <div class="font-weight-600">${fmtKg(cardData.lastInputAmount, 2)}</div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end">
+        <button
+          class="btn btn-sm btn-primary btn-fill-input"
+          data-device-id="${cardData.deviceId}"
+          data-device-name="${escapeHtml(cardData.deviceName)}"
+        >
+          <i class="fal fa-plus mr-1"></i>填寫入料資訊
+        </button>
+      </div>
+    </div>
+  </div>
+`;
+
       elCardList.appendChild(col);
     }
   }

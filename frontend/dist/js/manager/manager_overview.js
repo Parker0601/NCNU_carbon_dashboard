@@ -113,40 +113,26 @@ async function loadDevicesStatusWithPending() {
 
   // ===================== 3) 碳排放概況（沿用你 Manager Carbon 的 API） =====================
   // 3-1 熱點圓餅圖（來源占比）
-  const COLORS = ['#fd3995','#1dc9b7','#ffc241','#5b6be8','#39a2fd','#6f42c1','#20c997','#f7b924','#868e96'];
+  let pieChart;
+  async function loadBreakdownAndRender() {
+    // 預設抓今年 1/1~12/31
+    const now = new Date();
+    const start = `${now.getFullYear()}-01-01`;
+    const end   = `${now.getFullYear()}-12-31`;
+    const json = await fetchJSON(`${API_ROOT}/carbon/emissions-breakdown?startDate=${encodeURIComponent(start)}&endDate=${encodeURIComponent(end)}`);
+    const items = (json?.data?.breakdown) || [];
+    const labels = items.map(i => i.fuelName);
+    const data = items.map(i => i.totalEmission || 0);
 
-function renderPieLegend(labels, colors){
-  const el = document.getElementById('carbon-legend');
-  if (!el) return;
-  el.innerHTML = labels.map((lbl,i)=>(
-    `<div class="item"><span class="swatch" style="background:${colors[i%colors.length]}"></span>${esc(lbl)}</div>`
-  )).join('');
-}
-
-async function loadBreakdownAndRender() {
-  const now = new Date();
-  const start = `${now.getFullYear()}-01-01`;
-  const end   = `${now.getFullYear()}-12-31`;
-  const json = await fetchJSON(`${API_ROOT}/carbon/emissions-breakdown?startDate=${encodeURIComponent(start)}&endDate=${encodeURIComponent(end)}`);
-  const items = (json?.data?.breakdown) || [];
-  const labels = items.map(i => i.fuelName);
-  const data = items.map(i => i.totalEmission || 0);
-
-  const ctx = document.getElementById('pieChart')?.getContext('2d');
-  if (!ctx) return;
-  if (pieChart) pieChart.destroy();
-  pieChart = new Chart(ctx, {
-    type: 'doughnut',
-    data: { labels, datasets: [{ data, backgroundColor: COLORS }] },
-    options: {
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ display:false } }   // ★ 自己做 legend
-    }
-  });
-
-  renderPieLegend(labels, COLORS);           // ★ 產生可換行的圖例
-}
-
+    const ctx = document.getElementById('pieChart')?.getContext('2d');
+    if (!ctx) return;
+    if (pieChart) pieChart.destroy();
+    pieChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data, backgroundColor: ['#fd3995','#1dc9b7','#ffc241','#5b6be8','#39a2fd','#6f42c1'] }] },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' } } }
+    });
+  }
 
   // 3-2 趨勢折線圖（依右上 select 的 7/30/365 或 month/year 模式）
   let trendChart;
@@ -177,26 +163,51 @@ async function loadBreakdownAndRender() {
   async function refreshAlertToast() {
     try {
       const snap = await fetchJSON(`${API_ROOT}/schedule/assign-human-resource`);
-      const faulty = snap?.data?.faultyDevices || []; // 內含 3/4/2 的設備
+  
+      // 只留「故障(3)」的設備
+      const all = snap?.data?.faultyDevices || [];
+      const faulty = all.filter(d => ['3'].includes(String(d.status ?? d.deviceStatus)));
+  
       const $toast = $('#alert-toast');
-
-      if (faulty.length) {
-        const names = faulty.map(d => d.deviceName || `設備#${d.deviceId}`).slice(0, 3).join('、');
-        $toast.find('strong').text('即時異常通知：');
-        $toast.contents().filter((_,n)=>n.nodeType===3).remove(); // 清掉原本文字節點
-        $toast.append(` ${names} 有異常，請立即處理！`);
-        // 只在第一次開頁顯示一次；若你想每次 API 有異常就顯示，可拿掉 sessionStorage 判斷
-        if (!sessionStorage.getItem('manager_overview_alert')) {
-          $toast.fadeIn();
-        }
-      } else {
-        $('#alert-toast').hide();
+  
+      // 讀取上次的異常 deviceId 清單
+      const prevIds = new Set(JSON.parse(sessionStorage.getItem('faulty_ids') || '[]'));
+      // 這次的異常 deviceId 清單（去重）
+      const currIds = Array.from(new Set(faulty.map(d => d.deviceId ?? d.id)));
+  
+      // 【只取新增的異常】：上次沒有、這次才出現
+      const newly = faulty.filter(d => !prevIds.has(d.deviceId ?? d.id));
+  
+      // 更新記錄（下次比較用）
+      sessionStorage.setItem('faulty_ids', JSON.stringify(currIds));
+  
+      // 沒有任何故障就關閉提示
+      if (currIds.length === 0) {
+        $toast.hide();
+        return;
       }
+  
+      // 有故障，但本次沒有「新增」的 → 不提示（保持目前狀態）
+      if (newly.length === 0) return;
+  
+      // 組訊息（只列前 3 台，避免太長）
+      const names = newly
+        .map(d => d.deviceName || `設備#${d.deviceId ?? d.id}`)
+        .slice(0, 3)
+        .join('、');
+  
+      // 重置內容再顯示
+      $toast.find('strong').text('即時異常通知：');
+      // 清掉 strong 後面的舊文字節點，避免越疊越長
+      $toast.contents().filter((_, n) => n.nodeType === 3).remove();
+      $toast.append(` ${names} 新增異常，請立即分配人員處理！`);
+      $toast.fadeIn();
+  
     } catch (e) {
-      // 失敗就靜靜地略過，不要吵
       console.warn('alert-toast refresh failed:', e.message);
     }
   }
+  
   // 點整個彈窗 → 跳轉到即時異常監控
   $('#alert-toast').on('click', function (e) {
     if (!$(e.target).hasClass('close')) {
@@ -215,7 +226,7 @@ async function loadBreakdownAndRender() {
   async function init() {
     try {
       const devices = await loadDevicesStatusWithPending();
-      renderDeviceStatus(devices);
+renderDeviceStatus(devices);
       await loadBreakdownAndRender();
       await loadTrendAndRender($('#timeRange').val() || '7');
       await refreshAlertToast();

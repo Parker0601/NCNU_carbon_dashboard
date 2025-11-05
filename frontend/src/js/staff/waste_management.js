@@ -294,16 +294,6 @@ col.innerHTML = `
         </div>
       </div>
 
-      <div class="mb-3">
-        <div class="d-flex justify-content-between mb-1">
-          <small class="text-muted">近期使用率（估算）</small>
-          <small class="text-muted">${nf0.format(cardData.utilPercent)}%</small>
-        </div>
-        <div class="progress" style="height:8px;">
-          <div class="progress-bar bg-success" role="progressbar" style="width:${cardData.utilPercent}%"></div>
-        </div>
-      </div>
-
       <div class="row text-center mb-3">
         <div class="col-4">
           <div class="small text-muted">狀態</div>

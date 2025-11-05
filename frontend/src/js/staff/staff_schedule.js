@@ -197,6 +197,20 @@ const $calendarWrap = $('#calendar-view');
 const $listWrap = $('#list-view');
 const $tableBody = $('#schedule-table tbody');
 
+// 只顯示「非完成」的工作任務（issue 不受影響）
+function applyVisibilityFilterSchedule(arr) {
+  return arr.filter(e => !(e.type === 'schedule' && e.statusText === '完成'));
+}
+
+// 重新整理 FullCalendar 事件來源
+function refreshCalendarEvents() {
+  if (calendar) {
+    calendar.removeAllEvents();
+    calendar.addEventSource(toCalendarEvents(currentSchedule));
+  }
+}
+
+
 // ==============================
 // UI：列表
 // ==============================
@@ -321,8 +335,9 @@ function ensureCalendar() {
 // ==============================
 async function loadMyTasks() {
   const resp = await fetchJSON(API_MY_TASKS);
-  currentSchedule = normalizeTasks(resp);
+  currentSchedule = applyVisibilityFilterSchedule(normalizeTasks(resp));
 }
+
 
 // ==============================
 /** 入口 */
@@ -391,11 +406,9 @@ $(document).ready(async function () {
 
       // 成功後重載並刷新
       await loadMyTasks();
-      if (calendar) {
-        calendar.removeAllEvents();
-        calendar.addEventSource(toCalendarEvents(currentSchedule));
-      }
+      currentSchedule = applyVisibilityFilterSchedule(currentSchedule);
       renderList(currentSchedule);
+      refreshCalendarEvents();
 
       Swal.fire('已接受任務', '', 'success');
     } catch (err) {
@@ -484,11 +497,10 @@ $(document).ready(async function () {
 
       // 成功後重載我的任務並刷新畫面
       await loadMyTasks();
-      if (calendar) {
-        calendar.removeAllEvents();
-        calendar.addEventSource(toCalendarEvents(currentSchedule));
-      }
+      currentSchedule = applyVisibilityFilterSchedule(currentSchedule);
       renderList(currentSchedule);
+      refreshCalendarEvents();
+
 
       Swal.fire('已送出申請', '維修申請已提交給主管審查', 'success');
     } catch (error) {

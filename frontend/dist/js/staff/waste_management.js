@@ -4,12 +4,17 @@
 const API_BASE = 'http://localhost:3000/api';
 const API_DEVICES_PRIMARY  = `${API_BASE}/devices`;        // 需 requireAdmin
 const API_DEVICES_FALLBACK = `${API_BASE}/devices/status`; // 一般使用者可用
-const API_WASTE_BY_DEVICE  = (deviceId) => `${API_BASE}/scrap/device/${deviceId}/history?limit=30`; // ← 補這行
+const API_WASTE_BY_DEVICE  = (deviceId) => `${API_BASE}/scrap/device/${deviceId}/history?limit=30`;
+const API_MY_SCRAPS        = `${API_BASE}/scrap/my-data`;
+const API_DELETE_SCRAP     = (id) => `${API_BASE}/scrap/${encodeURIComponent(id)}`;
 const PAGES_BASE =
   window.location.origin.includes(':8080') ? 'http://localhost:3000' : '';
-const WASTE_INPUT_PAGE = (deviceId) =>
-  `${PAGES_BASE}/waste_input?deviceId=${encodeURIComponent(deviceId)}`;
-const MY_SCRAPS_PAGE = () => `${PAGES_BASE}/my_scraps`;
+const WASTE_INPUT_PAGE = (deviceId, scrapId = null) => {
+  const params = new URLSearchParams();
+  if (deviceId) params.append('deviceId', deviceId);
+  if (scrapId) params.append('id', scrapId);
+  return `${PAGES_BASE}/waste_input${params.toString() ? '?' + params.toString() : ''}`;
+};
 
 // ===== 版面/格式小工具 =====
 const nf0 = new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 0 });
@@ -50,7 +55,14 @@ async function fetchJSON(url, options = {}) {
   const resp = await fetch(url, { ...options, headers });
   let data = null;
   try { data = await resp.json(); } catch {}
-  if (!resp.ok) {
+  
+  if (resp.status === 401) {
+    await Swal.fire({ icon: 'warning', title: '請先登入', text: '登入逾時或尚未登入' });
+    window.location.href = '/page_login';
+    throw new Error('Unauthorized');
+  }
+  
+  if (!resp.ok || (data && data.success === false)) {
     const err = new Error((data && (data.message || data.error)) || `HTTP ${resp.status}`);
     // @ts-ignore
     err.status = resp.status;
@@ -85,12 +97,17 @@ async function ensureChart() {
 // ====================================================
 const elCardView      = document.getElementById('waste-card-view');
 const elReportView    = document.getElementById('waste-report-view');
+const elMyScrapsView  = document.getElementById('waste-my-scraps-view');
 const elCardList      = document.getElementById('waste-card-list');
 const elBtnCardView   = document.getElementById('btn-card-view');
 const elBtnReportView = document.getElementById('btn-report-view');
+const elBtnMyScrapsView = document.getElementById('btn-my-scraps-view');
 const elBtnRefresh    = document.getElementById('btn-waste-refresh');
+const elBtnMyScrapsRefresh = document.getElementById('btn-my-scraps-refresh');
 const elReportSelect  = document.getElementById('waste-report-selector');
 const elReportCanvas  = document.getElementById('waste-report-canvas');
+const elMyScrapsTable = document.getElementById('my-scraps-table');
+const elMyScrapsTbody = elMyScrapsTable ? elMyScrapsTable.querySelector('tbody') : null;
 
 // ====================================================
 // 狀態
@@ -98,6 +115,7 @@ const elReportCanvas  = document.getElementById('waste-report-canvas');
 let devicesCache = [];     // [{ id, name, code, status }, ...]
 let recentMap = new Map(); // deviceId -> [{id, amount, type}, ...]
 let chartRef = null;
+const scrapCache = {};     // 我的紀錄快取
 
 // ====================================================
 // 初始化
@@ -105,6 +123,13 @@ let chartRef = null;
 document.addEventListener('DOMContentLoaded', () => {
   bindUI();
   boot();
+  
+  // 檢查 URL 參數，如果有 view=my-scraps，自動切換到我的紀錄視圖
+  const urlParams = new URLSearchParams(window.location.search);
+  const viewParam = urlParams.get('view');
+  if (viewParam === 'my-scraps') {
+    toggleView('my-scraps').then(() => loadMyScraps());
+  }
 });
 
 function bindUI() {
@@ -112,10 +137,15 @@ function bindUI() {
   elBtnReportView?.addEventListener('click', async () => {
     toggleView('report');
     if (!chartRef) {
-      await ensureChart(); // ← 新增
+      await ensureChart();
       renderReportChart(elReportSelect?.value || 'daily_trend');
     }
   });
+  elBtnMyScrapsView?.addEventListener('click', async () => {
+    toggleView('my-scraps');
+    await loadMyScraps();
+  });
+  
   elBtnRefresh?.addEventListener('click', async () => {
     try {
       await boot(true);
@@ -124,6 +154,11 @@ function bindUI() {
       Swal.fire({ icon: 'error', title: '刷新失敗', text: e.message || String(e) });
     }
   });
+  
+  elBtnMyScrapsRefresh?.addEventListener('click', async () => {
+    await loadMyScraps();
+  });
+  
   elReportSelect?.addEventListener('change', () => renderReportChart(elReportSelect.value));
 
   elCardList?.addEventListener('click', (e) => {
@@ -134,10 +169,20 @@ function bindUI() {
     window.location.href = WASTE_INPUT_PAGE(deviceId);
   });
 
-  const elBtnMyScraps = document.getElementById('btn-my-scraps-link');
-  elBtnMyScraps?.addEventListener('click', () => {
-    window.location.href = MY_SCRAPS_PAGE();
-  });
+  // 我的紀錄表格操作
+  if (elMyScrapsTbody) {
+    elMyScrapsTbody.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const tr = btn.closest('tr');
+      const id = tr?.dataset.id;
+      if (!id) return;
+
+      if (btn.classList.contains('js-view')) onViewScrap(id);
+      else if (btn.classList.contains('js-edit')) onEditScrap(id);
+      else if (btn.classList.contains('js-del')) onDeleteScrap(id);
+    });
+  }
 }
 
 async function boot(force = false) {
@@ -150,13 +195,20 @@ async function boot(force = false) {
 }
 
 async function toggleView(view) {
-  const showCard = view === 'card';
-  elCardView.style.display = showCard ? '' : 'none';
-  elReportView.style.display = showCard ? 'none' : '';
-  elBtnCardView?.classList.toggle('active', showCard);
-  elBtnReportView?.classList.toggle('active', !showCard);
-  if (!showCard) {
-    await ensureChart(); // ← 新增
+  const isCard = view === 'card';
+  const isReport = view === 'report';
+  const isMyScraps = view === 'my-scraps';
+  
+  elCardView.style.display = isCard ? '' : 'none';
+  elReportView.style.display = isReport ? '' : 'none';
+  elMyScrapsView.style.display = isMyScraps ? '' : 'none';
+  
+  elBtnCardView?.classList.toggle('active', isCard);
+  elBtnReportView?.classList.toggle('active', isReport);
+  elBtnMyScrapsView?.classList.toggle('active', isMyScraps);
+  
+  if (isReport && !chartRef) {
+    await ensureChart();
     renderReportChart(elReportSelect?.value || 'daily_trend');
   }
 }
@@ -414,4 +466,106 @@ async function buildChartData(kind) {
     tension: 0.2
   }));
   return { type: 'line', labels, datasets };
+}
+
+// ====================================================
+// 我的紀錄功能
+// ====================================================
+function renderStatus(status) {
+  const map = {
+    '0': ['草稿', 'badge badge-secondary'],
+    '1': ['已提交', 'badge badge-primary'],
+    '2': ['已審核', 'badge badge-success'],
+    '3': ['作廢', 'badge badge-danger'],
+  };
+  const [text, cls] = map[String(status)] || [status, 'badge badge-light'];
+  return `<span class="${cls}">${text}</span>`;
+}
+
+async function loadMyScraps() {
+  if (!elMyScrapsTbody) return;
+  elMyScrapsTbody.innerHTML = `
+    <tr>
+      <td colspan="6" class="text-center">
+        <span class="spinner-border spinner-border-sm"></span>&nbsp;載入中...
+      </td>
+    </tr>`;
+  try {
+    const resp = await fetchJSON(API_MY_SCRAPS);
+    const list = Array.isArray(resp) ? resp : (resp.data || []);
+    if (!list.length) {
+      elMyScrapsTbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">目前沒有紀錄</td></tr>`;
+      return;
+    }
+    renderMyScrapsRows(list);
+  } catch (e) {
+    elMyScrapsTbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">載入失敗：${escapeHtml(e.message)}</td></tr>`;
+    Swal.fire({ icon: 'error', title: '載入失敗', text: e.message || '請稍後再試' });
+  }
+}
+
+function renderMyScrapsRows(list) {
+  elMyScrapsTbody.innerHTML = list.map(r => {
+    scrapCache[r.id] = r;
+    return `
+      <tr data-id="${escapeHtml(r.id)}">
+        <td>${escapeHtml(r.id)}</td>
+        <td>${escapeHtml(r.deviceName || r.deviceId || '')}</td>
+        <td>${escapeHtml(r.type ?? '')}</td>
+        <td>${escapeHtml(r.weight ?? '')}</td>
+        <td>${renderStatus(r.status)}</td>
+        <td class="text-right pr-3">
+          <button class="btn btn-sm btn-outline-primary js-view">查看</button>
+          <button class="btn btn-sm btn-outline-warning js-edit">編輯</button>
+          <button class="btn btn-sm btn-outline-danger js-del">刪除</button>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+function onViewScrap(id) {
+  const r = scrapCache[id];
+  if (!r) return;
+  const html = `
+    <div class="text-start">
+      <div><b>ID：</b>${escapeHtml(r.id)}</div>
+      <div><b>設備：</b>${escapeHtml(r.deviceName || r.deviceId)}</div>
+      <div><b>類型：</b>${escapeHtml(r.type ?? '')}</div>
+      <div><b>重量：</b>${escapeHtml(r.weight ?? '')}</div>
+      ${r.volume != null ? `<div><b>體積：</b>${escapeHtml(r.volume)}</div>` : ''}
+      ${r.humidity != null ? `<div><b>含水率：</b>${escapeHtml(r.humidity)}</div>` : ''}
+      <div><b>狀態：</b>${renderStatus(r.status)}</div>
+    </div>`;
+  Swal.fire({ title: '紀錄詳情', html, width: 600, confirmButtonText: '關閉' });
+}
+
+function onEditScrap(id) {
+  const r = scrapCache[id];
+  if (!r) return;
+  window.location.href = WASTE_INPUT_PAGE(r.deviceId, id);
+}
+
+async function onDeleteScrap(id) {
+  const c = await Swal.fire({
+    icon: 'warning',
+    title: `確定要刪除？`,
+    text: `ID=${id}`,
+    showCancelButton: true,
+    confirmButtonText: '刪除',
+    cancelButtonText: '取消',
+  });
+  if (!c.isConfirmed) return;
+
+  try {
+    await fetchJSON(API_DELETE_SCRAP(id), { method: 'DELETE' });
+    await Swal.fire({ icon: 'success', title: '已刪除', timer: 1000, showConfirmButton: false });
+    // 直接更新 UI
+    const tr = elMyScrapsTbody.querySelector(`tr[data-id="${CSS.escape(String(id))}"]`);
+    if (tr) tr.remove();
+    if (!elMyScrapsTbody.children.length) {
+      elMyScrapsTbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">目前沒有紀錄</td></tr>`;
+    }
+  } catch (e) {
+    Swal.fire({ icon: 'error', title: '刪除失敗', text: e.message || '請稍後再試' });
+  }
 }

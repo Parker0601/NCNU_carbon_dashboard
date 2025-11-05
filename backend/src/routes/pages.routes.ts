@@ -16,10 +16,6 @@ router.get('/waste_input', (_req: Request, res: Response) => {
   res.sendFile(path.join(DIST, 'waste_input.html'));
 });
 
-router.get('/my_scraps', (_req: Request, res: Response) => {
-  res.sendFile(path.join(DIST, 'my_scraps.html'));
-});
-
 router.get('/scrap_edit', (_req: Request, res: Response) => {
   res.sendFile(path.join(DIST, 'scrap_edit.html'));
 });

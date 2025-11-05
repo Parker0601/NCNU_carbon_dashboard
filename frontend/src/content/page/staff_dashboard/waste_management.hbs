@@ -10,6 +10,26 @@
 {{#*inline "head-block"}}
 <link rel="stylesheet" media="screen, print" href="css/notifications/sweetalert2/sweetalert2.bundle.css">
 <script src="/js/vendor/chart.umd.js"></script>
+<style>
+  /* 我的紀錄表格樣式 */
+  .card.my-scraps-card { border-radius: 1rem; }
+  .table.my-scraps-table thead th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--theme-primary-50, #f8f9fa);
+  }
+  .table.my-scraps-table td, .table.my-scraps-table th {
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .table.my-scraps-table .col-id      { width: 80px; }
+  .table.my-scraps-table .col-device  { min-width: 160px; }
+  .table.my-scraps-table .col-type    { min-width: 120px; }
+  .table.my-scraps-table .col-weight  { width: 120px; }
+  .table.my-scraps-table .col-status  { width: 120px; }
+  .table.my-scraps-table .col-actions { width: 220px; }
+  .toolbar .btn + .btn { margin-left: .5rem; }
+  .badge.rounded-pill { border-radius: 999px; padding: .35rem .6rem; }
+</style>
 {{/inline}}
 
 {{#*inline "content-block"}}
@@ -18,7 +38,7 @@
   <div>
     <button id="btn-card-view" class="btn btn-outline-primary btn-sm active">廢料卡片</button>
     <button id="btn-report-view" class="btn btn-outline-secondary btn-sm">廢料報表</button>
-    <button id="btn-my-scraps-link" class="btn btn-outline-secondary btn-sm">我的紀錄</button>
+    <button id="btn-my-scraps-view" class="btn btn-outline-secondary btn-sm">我的紀錄</button>
   </div>
   <div>
     <button id="btn-waste-refresh" class="btn btn-outline-info btn-sm mr-2">
@@ -58,6 +78,49 @@
               <canvas id="waste-report-canvas" height="120"></canvas>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 我的紀錄視圖 -->
+<div id="waste-my-scraps-view" style="display:none;">
+  <div class="row">
+    <div class="col-12">
+      <div class="card my-scraps-card shadow-sm">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <div>
+            <h4 class="mb-0">我的廢料紀錄</h4>
+            <small class="text-muted">檢視自己填報的所有入料紀錄</small>
+          </div>
+          <div class="toolbar d-flex align-items-center">
+            <button id="btn-my-scraps-refresh" class="btn btn-outline-primary">
+              <i class="fal fa-sync"></i> 重新整理
+            </button>
+          </div>
+        </div>
+
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm table-striped table-hover my-scraps-table mb-0" id="my-scraps-table">
+              <thead class="thead-light">
+                <tr>
+                  <th class="col-id">ID</th>
+                  <th class="col-device">設備</th>
+                  <th class="col-type">類型</th>
+                  <th class="col-weight">重量 (kg)</th>
+                  <th class="col-status">狀態</th>
+                  <th class="col-actions text-right pr-3">操作</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card-footer text-muted small">
+          提示：點擊「查看」可快速檢視詳細欄位；「編輯」會帶入對應的設備進入入料頁。
         </div>
       </div>
     </div>

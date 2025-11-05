@@ -180,8 +180,8 @@ elBtnSubmit?.addEventListener('click', async () => {
     const msg = res?.message || (EDITING_ID ? '入料資訊已更新' : '入料資訊已新增');
     await Swal.fire({ icon: 'success', title: '成功', text: msg, timer: 1200, showConfirmButton: false });
 
-    // 成功後導向：編輯回「我的紀錄」，新增回「入料作業」
-    window.location.href = EDITING_ID ? '/my_scraps' : '/waste_management';
+    // 成功後導向：編輯和新增都導向「入料作業」
+    window.location.href = '/waste_management';
   } catch (e) {
     Swal.fire({ icon: 'error', title: EDITING_ID ? '更新失敗' : '送出失敗', text: e.message || String(e) });
   } finally {

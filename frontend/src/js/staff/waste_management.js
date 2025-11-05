@@ -21,9 +21,10 @@ function fmtKg(x, digits = 2) {
 
 function statusBadge(status) {
   const s = String(status);
-  if (s === '1') return { text: '正常運行',  cls: 'badge-success', icon: 'fa-check-circle' };
-  if (s === '2') return { text: '維護中',    cls: 'badge-warning', icon: 'fa-tools' };
-  if (s === '3') return { text: '故障',      cls: 'badge-danger',  icon: 'fa-exclamation-triangle' };
+  if (s === '1') return { text: '正常運行',      cls: 'badge-success',  icon: 'fa-check-circle' };
+  if (s === '2') return { text: '維護中',        cls: 'badge-warning',  icon: 'fa-tools' };
+  if (s === '3') return { text: '故障',          cls: 'badge-danger',   icon: 'fa-exclamation-triangle' };
+  if (s === '4') return { text: '已指派未處理',  cls: 'badge-info',     icon: 'fa-user-cog' }; // ★ 新增
   return { text: '未知', cls: 'badge-secondary', icon: 'fa-question-circle' };
 }
 
@@ -239,12 +240,12 @@ function renderCards() {
 
     const utilPercent = Math.max(0, Math.min(100, Math.round(recentTotal)));
 
-    let statusText = '未知', statusClass = 'badge-secondary';
-    const ds = String(dev.status);
-    if (ds === '1') { statusText = '正常運行'; statusClass = 'badge-success'; }
-    else if (ds === '2') { statusText = '維護中'; statusClass = 'badge-warning'; }
-    else if (ds === '3') { statusText = '故障'; statusClass = 'badge-danger'; }
-
+      let statusText = '未知', statusClass = 'badge-secondary';
+      const ds = String(dev.status);
+      if (ds === '1') { statusText = '正常運行'; statusClass = 'badge-success'; }
+      else if (ds === '2') { statusText = '維護中'; statusClass = 'badge-warning'; }
+      else if (ds === '3') { statusText = '故障'; statusClass = 'badge-danger'; }
+      else if (ds === '4') { statusText = '已指派未處理'; statusClass = 'badge-info'; } // ★ 新增
     const cardData = {
       deviceId: dev.id,
       deviceName: dev.name || `設備 #${dev.id}`,

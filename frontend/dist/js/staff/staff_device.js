@@ -45,9 +45,42 @@
   const hoursBetween = (a, b) => Math.max(0, (new Date(b) - new Date(a)) / 36e5);
 
   const statusMap = {
-    '1': { text: '正常運行', badge: 'badge-success' },
-    '2': { text: '維護中',   badge: 'badge-warning' },
-    '3': { text: '故障',     badge: 'badge-danger'  },
+    '1': { 
+      text: '正常運行', 
+      badge: 'badge-success',
+      headerBg: 'bg-success-700',
+      headerIcon: 'fa-check-circle',
+      borderColor: 'border-success',
+      ratioColor: 'text-success',
+      ratioIcon: 'fa-arrow-up'
+    },
+    '2': { 
+      text: '維護中', 
+      badge: 'badge-warning',
+      headerBg: 'bg-warning-400',
+      headerIcon: 'fa-wrench',
+      borderColor: 'border-warning',
+      ratioColor: 'text-warning',
+      ratioIcon: 'fa-minus'
+    },
+    '3': { 
+      text: '故障', 
+      badge: 'badge-danger',
+      headerBg: 'bg-danger-500',
+      headerIcon: 'fa-exclamation-triangle',
+      borderColor: 'border-danger',
+      ratioColor: 'text-danger',
+      ratioIcon: 'fa-arrow-down'
+    },
+    '4': { 
+      text: '維護中', 
+      badge: 'badge-warning',
+      headerBg: 'bg-warning-400',
+      headerIcon: 'fa-wrench',
+      borderColor: 'border-warning',
+      ratioColor: 'text-warning',
+      ratioIcon: 'fa-minus'
+    },
   };
 
   // ========= DOM 參考 =========
@@ -78,24 +111,73 @@
 
     devices.forEach((d) => {
       const { id, name, status, bootTime, ratio } = d;
-      const s = statusMap[status] || { text: `未知(${status})`, badge: 'badge-secondary' };
+      const s = statusMap[status] || { 
+        text: `未知(${status})`, 
+        badge: 'badge-secondary',
+        headerBg: 'bg-fusion-100',
+        headerIcon: 'fa-question-circle',
+        borderColor: 'border-secondary',
+        ratioColor: 'text-muted',
+        ratioIcon: 'fa-minus'
+      };
+      
+      // 根據 ratio 判斷效率狀態
+      const ratioValue = ratio != null ? Number(ratio) : null;
+      const ratioStatus = ratioValue !== null 
+        ? (ratioValue >= 70 ? '良好' : ratioValue >= 40 ? '待觀察' : '需改善')  
+        : null;
+      
       const card = document.createElement('div');
       card.className = 'col-12 col-md-6 col-lg-4 mb-3';
       card.innerHTML = `
-        <div class="card h-100 shadow-sm">
-          <div class="card-body d-flex flex-column">
-            <div class="d-flex justify-content-between align-items-start mb-2">
-              <h5 class="card-title mb-0">${name || '未命名設備'}</h5>
-              <span class="badge ${s.badge}">${s.text}</span>
+        <div class="card h-100 shadow-sm ${s.borderColor}" style="border-top-width: 4px !important;">
+          <!-- 彩色標題區 -->
+          <div class="card-header ${s.headerBg} text-white d-flex justify-content-between align-items-center py-2 px-3">
+            <div class="d-flex align-items-center">
+              <i class="fal ${s.headerIcon} mr-2 fs-lg"></i>
+              <h5 class="card-title mb-0 text-white font-weight-bold">${name || '未命名設備'}</h5>
             </div>
-            <div class="small text-muted mb-2">ID：${id}</div>
-            <ul class="list-unstyled mb-3">
-              <li>啟動時間：${fmtDateTime(bootTime)}</li>
-              <li>設備使用效率 (ratio)：${(ratio != null ? (ratio).toFixed(1) : '-') }%</li>
-            </ul>
-            <div class="mt-auto d-flex gap-2">
-              <button class="btn btn-sm btn-outline-primary" data-action="history" data-id="${id}" data-name="${name}">
-                <i class="fal fa-history"></i> 維護歷史
+            <span class="badge badge-light text-dark">${s.text}</span>
+          </div>
+          
+          <!-- 卡片內容 -->
+          <div class="card-body d-flex flex-column bg-white">
+            <!-- 設備ID -->
+            <div class="mb-3">
+              <div class="text-muted mb-1">
+                <i class="fal fa-tag mr-1"></i> 設備編號
+              </div>
+              <span class="font-weight-bold text-dark fs-lg">#${id}</span>
+            </div>
+            
+            <!-- 啟動時間 -->
+            <div class="mb-3">
+              <div class="text-muted mb-1">
+                <i class="fal fa-clock mr-1"></i> 啟動時間
+              </div>
+              <span class="font-weight-normal text-dark fs-md">${fmtDateTime(bootTime)}</span>
+            </div>
+            
+            <!-- 使用效率 -->
+            <div class="mb-3">
+              <div class="text-muted mb-1">
+                <i class="fal fa-chart-line mr-1"></i> 設備使用效率
+              </div>
+              <div class="d-flex align-items-baseline">
+                <span class="display-4 font-weight-bold ${s.ratioColor} mr-2">
+                  ${ratioValue !== null ? ratioValue.toFixed(1) : '-'}
+                </span>
+                <span class="text-muted">%</span>
+                ${ratioStatus ? `<span class="ml-auto badge ${ratioValue >= 70 ? 'badge-success' : ratioValue >= 40 ? 'badge-warning' : 'badge-danger'}">
+                  <i class="fal ${s.ratioIcon} mr-1"></i> ${ratioStatus}
+                </span>` : ''}
+              </div>
+            </div>
+            
+            <!-- 操作按鈕 -->
+            <div class="mt-auto pt-2 border-top">
+              <button class="btn btn-sm btn-outline-primary w-100" data-action="history" data-id="${id}" data-name="${name}">
+                <i class="fal fa-history mr-1"></i> 查看維護歷史
               </button>
             </div>
           </div>

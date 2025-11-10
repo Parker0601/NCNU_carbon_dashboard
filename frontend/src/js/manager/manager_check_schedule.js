@@ -180,17 +180,21 @@ function statusLabel(s) {
       old.status = 'rejected';
       old.rejectReason = reason;
     }
-    // 新一輪（由後端真實產生；前端先暫時補一筆讓畫面即時感）
-    currentSchedule.push({
-      id: `tmp-${Date.now()}`,         // 臨時 id（等下次拉資料會被真實資料取代）
-      title: old ? old.title : '重新處理',
-      start: new Date().toISOString(),
-      end: newEndIso,
-      owner: old ? old.owner : '-',
-      status: 'submitted',             // 在審核頁先呈現「待審核」以利管理（也可顯示「已指派」）
-      desc: `（退回重辦）${old?.desc || ''}`,
-      rejectReason: ''
-    });
+    await fetchSchedule(); // 重新撈資料
+    renderList(currentSchedule);
+    refreshCalendarEvents();
+
+    // // 新一輪（由後端真實產生；前端先暫時補一筆讓畫面即時感）
+    // currentSchedule.push({
+    //   id: `tmp-${Date.now()}`,         // 臨時 id（等下次拉資料會被真實資料取代）
+    //   title: old ? old.title : '重新處理',
+    //   start: new Date().toISOString(),
+    //   end: newEndIso,
+    //   owner: old ? old.owner : '-',
+    //   status: 'submitted',             // 在審核頁先呈現「待審核」以利管理（也可顯示「已指派」）
+    //   desc: `（退回重辦）${old?.desc || ''}`,
+    //   rejectReason: ''
+    // });
 
     currentSchedule = applyVisibilityFilter(currentSchedule);currentSchedule = applyVisibilityFilter(currentSchedule);
     renderList(currentSchedule);

@@ -7,6 +7,18 @@ import { authenticateToken, USER_ROLES, requireRole } from '../middleware/auth';
 
 const router = Router();
 
+// 類別數字 <-> 中文標籤 對應
+const CLASS_LABELS: Record<string, string> = {
+  '1': '燃料燃燒',
+  '2': '製程',
+  '3': '逸散',
+  '4': '移動',
+  '5': '電力使用',
+};
+const LABEL_TO_CLASSNUM: Record<string, string> = Object.entries(CLASS_LABELS)
+  .reduce((acc, [k, v]) => { acc[v] = k; return acc; }, {} as Record<string, string>);
+const VALID_CLASS_NUMS = new Set(['1','2','3','4','5']);
+
 // 台灣時間工具函數
 function getTaiwanDate(): string {
   const now = new Date();
@@ -133,7 +145,7 @@ router.get('/fuels/class-1', async (_req, res) => {
       name: carbon.fuelName,
       unit: carbon.unit,
       class: carbon.class,
-    }).from(carbon).where(eq(carbon.class, '1'));
+    }).from(carbon).where(eq(carbon.class, CLASS_LABELS['1']));
 
     console.log(`✅ 成功取得 ${fuels.length} 種class=1的燃料`);
     
@@ -163,7 +175,7 @@ router.get('/fuels/class-2', async (_req, res) => {
       name: carbon.fuelName,
       unit: carbon.unit,
       class: carbon.class,
-    }).from(carbon).where(eq(carbon.class, '2'));
+    }).from(carbon).where(eq(carbon.class, CLASS_LABELS['2']));
 
     console.log(`✅ 成功取得 ${fuels.length} 種class=2的燃料`);
     
@@ -193,7 +205,7 @@ router.get('/fuels/class-3', async (_req, res) => {
       name: carbon.fuelName,
       unit: carbon.unit,
       class: carbon.class,
-    }).from(carbon).where(eq(carbon.class, '3'));
+    }).from(carbon).where(eq(carbon.class, CLASS_LABELS['3']));
 
     console.log(`✅ 成功取得 ${fuels.length} 種class=3的燃料`);
     
@@ -223,7 +235,7 @@ router.get('/fuels/class-4', async (_req, res) => {
       name: carbon.fuelName,
       unit: carbon.unit,
       class: carbon.class,
-    }).from(carbon).where(eq(carbon.class, '4'));
+    }).from(carbon).where(eq(carbon.class, CLASS_LABELS['4']));
 
     console.log(`✅ 成功取得 ${fuels.length} 種class=4的燃料`);
     
@@ -253,7 +265,7 @@ router.get('/fuels/class-5', async (_req, res) => {
       name: carbon.fuelName,
       unit: carbon.unit,
       class: carbon.class,
-    }).from(carbon).where(eq(carbon.class, '5'));
+    }).from(carbon).where(eq(carbon.class, CLASS_LABELS['5']));
 
     console.log(`✅ 成功取得 ${fuels.length} 種class=5的燃料`);
     
@@ -591,7 +603,13 @@ router.get('/my-calculations', authenticateToken, async (req, res) => {
       
       filteredCalculations.forEach(record => {
         const date = record.calculationDate;
-        const classKey = `class${record.class}`;
+        // 從中文類別名稱映射回數字 1~5
+        const classNum = LABEL_TO_CLASSNUM[record.class as unknown as string] || '';
+        if (!VALID_CLASS_NUMS.has(classNum)) {
+          // 非 1~5 類別目前不計入彙總
+          return;
+        }
+        const classKey = `class${classNum}`;
         
         if (!dailyGroupsByClass[date]) {
           dailyGroupsByClass[date] = {

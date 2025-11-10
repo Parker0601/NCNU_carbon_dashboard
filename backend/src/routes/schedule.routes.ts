@@ -62,7 +62,8 @@ router.use(requireUser);
 const assignHumanResourceSchema = z.object({
   issueId: z.number().int().positive(),
   userId: z.number().int().positive(),
-  endTime: z.string().datetime().optional()
+  // 允許 ISO 日期字串、或空字串 / null / 未提供
+  endTime: z.union([z.string().datetime(), z.literal(''), z.null()]).optional()
 });
 
 // ===========================================
@@ -247,6 +248,9 @@ router.post('/assign-human-resource', requireAdmin, async (req: Request, res: Re
           .values({
             issueId,
             userId: userId,
+            // 使用原生 SQL 字面值，避免 ORM 把空字串誤作為未設定
+            employeeDescription: sql`''` as any,
+            bossDescription: sql`''` as any,
             createTime: new Date()
           });
       }
@@ -265,9 +269,16 @@ router.post('/assign-human-resource', requireAdmin, async (req: Request, res: Re
       return errorResponse(res, error.issues.map(i => i.message).join('; '), 400);
     }
     // 紀錄詳細錯誤以利排查
-    console.error('assign-human-resource error:', error?.message || error, error?.stack);
+    console.error('assign-human-resource error:', {
+      message: error?.message,
+      code: error?.code,
+      detail: error?.detail,
+      stack: error?.stack
+    });
     const status = typeof error?.statusCode === 'number' ? error.statusCode : 500;
-    return errorResponse(res, 'Failed to assign staff member', status, error?.message);
+    const combinedDetail = [error?.message, error?.detail, error?.code].filter(Boolean).join(' | ') || String(error);
+    // 將詳細錯誤也放進 message 以便前端直接顯示原因
+    return errorResponse(res, `Failed to assign staff member: ${combinedDetail}`, status, combinedDetail);
   }
 });
 
@@ -512,7 +523,8 @@ router.post('/maintenance', async (req: Request, res: Response) => {
           issueId: existingIssue.id,
           userId: req.user.id,
           endTime: null,
-          employeeDescription: null
+          employeeDescription: sql`''` as any,
+          bossDescription: sql`''` as any
         })
         .returning();
 

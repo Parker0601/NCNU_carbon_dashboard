@@ -1,16 +1,19 @@
 /**
- * /js/staff/staff_schedule.js  (FullCalendar v5 + 接 accept-task API)
+ * /js/staff/staff_schedule.js  (FullCalendar v5 + 接 accept-task / maintenance API)
  * 串接後端：
  *   - GET   /api/schedule/my-tasks
  *   - PATCH /api/schedule/accept-task/:scheduleId
+ *   - POST  /api/schedule/maintenance
  *
  * - Calendar 與列表共用同一份資料 currentSchedule
  * - 狀態映射：assigned/accepted/submitted/approved/rejected
  *            → 未完成/進行中/申請中/完成/退回
- * 需求：頁面已載入
+ *
+ * 需求（頁面已載入）：
  *   - /js/vendors.bundle.js（含 jQuery）
  *   - /js/notifications/sweetalert2/sweetalert2.bundle.js
  *   - /js/miscellaneous/fullcalendar/main.min.js（v5）
+ *   - HTML 需有：#btn-calendar-view、#btn-list-view、#calendar-view（內含 #calendar）、#list-view（內含 #schedule-table tbody）
  */
 
 // ==============================
@@ -55,11 +58,55 @@ function escapeHtml(str) {
     .replaceAll('"','&quot;').replaceAll("'","&#39;");
 }
 
+// 傳入物件 + 多個欄位名，回傳第一個有值的
+function pick(o, ...keys) {
+  for (const k of keys) {
+    const v = o?.[k];
+    if (v !== undefined && v !== null && v !== '') return v;
+  }
+  return undefined;
+}
+
 // e.id 可能長得像 "S-12" 或 "I-7"，只對 S-* 才需要打 accept API
 function extractScheduleId(eventId) {
   if (!eventId || typeof eventId !== 'string') return null;
   const m = eventId.match(/^S-(\d+)$/);
   return m ? parseInt(m[1], 10) : null;
+}
+
+/**
+ * 把 (dateStr, timeStr) 轉成 FullCalendar 穩定可解析的本地 ISO（YYYY-MM-DDTHH:mm[:ss[.SSS]]）
+ * 支援：
+ *  - date='YYYY-MM-DD' + time='HH:mm'/'HH:mm:ss'/'HH:mm:ss.SSS'
+ *  - timeStr='YYYY-MM-DD HH:mm[:ss[.SSS]]' / 'YYYY-MM-DDTHH:mm[:ss[.SSS]][Z]'
+ *  - 只給 date -> 補 'T00:00:00'
+ * 回傳 null 表示無法解析
+ */
+function toLocalIso(dateStr, timeStr) {
+  if (!dateStr && !timeStr) return null;
+
+  // 情境 A：只給 timeStr，但它其實是完整日期或日期時間
+  if (!dateStr && timeStr) {
+    let s = String(timeStr).trim().replace(' ', 'T');
+    // YYYY-MM-DD 或 YYYY-MM-DDTHH:mm[:ss[.SSS]][Z]
+    if (/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z)?)?$/.test(s)) {
+      if (!s.includes('T')) return `${s}T00:00:00`;
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) return `${s}:00`; // 補秒
+      return s;
+    }
+  }
+
+  // 情境 B：date + time
+  const d = String(dateStr || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+
+  let t = String(timeStr || '00:00:00').trim();
+  if (t.includes('T')) t = t.split('T')[1] || '00:00:00';
+  // t 允許 HH:mm / HH:mm:ss / HH:mm:ss.SSS
+  if (/^\d{2}:\d{2}$/.test(t)) t = `${t}:00`;
+  if (!/^\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?$/.test(t)) t = '00:00:00';
+
+  return `${d}T${t}`;
 }
 
 // ==============================
@@ -85,15 +132,6 @@ function badgeClassByStatus(text) {
   return 'badge-secondary';
 }
 
-function eventClassByStatus(stxt) {
-  if (stxt === '退回') return 'bg-warning text-dark border-danger';
-  if (stxt === '未完成') return 'bg-warning text-dark border-warning';
-  if (stxt === '申請中') return 'bg-info';
-  if (stxt === '完成') return 'bg-success text-white border-success';
-  if (stxt === '進行中') return 'bg-primary text-white border-primary';
-  return '';
-}
-
 function statusStyle(status) {
   switch (String(status).toLowerCase()) {
     case 'assigned':  return { bg: '#6c757d', border: '#6c757d', text: '#ffffff' }; // 灰：未完成
@@ -109,12 +147,15 @@ function statusStyle(status) {
 // API → 統一資料模型
 // ==============================
 /**
- * 後端回傳：
+ * 後端回傳（可能包 data）：
  * {
- *   schedules: [{ scheduleId, title, description, date, startTime, endTime, status, deviceId, deviceName, ... }],
- *   issues:    [{ issueId, deviceId, description, status, createTime, deviceName, ... }]
+ *   data?: {
+ *     schedules: [{ scheduleId, title, description, date/start_date, start_time/startTime/start, end_time/endTime/end, status, deviceId/device_id, deviceName/device_name, rejectReason? }],
+ *     issues:    [{ issueId/issue_id, deviceId/device_id, description, status, createTime/create_time, deviceName/device_name, title? }]
+ *   }
  * }
- * 轉為：
+ *
+ * 轉為統一資料陣列：
  * {
  *   type: 'schedule' | 'issue',
  *   id: 'S-xxx' | 'I-xxx',
@@ -130,31 +171,48 @@ function normalizeTasks(apiData) {
   const schedules = Array.isArray(payload.schedules) ? payload.schedules : [];
   const issues    = Array.isArray(payload.issues)    ? payload.issues    : [];
 
+  // schedules
   for (const s of schedules) {
-    const start = s.date ? `${s.date}T${s.startTime || '00:00:00'}` : (s.startTime || null);
-    const end   = s.date ? `${s.date}T${s.endTime   || '00:00:00'}` : (s.endTime   || null);
-    const stxt  = statusText(s.status);
+    // date 可能叫 date / startDate / start_date / workDate / work_date
+    const dateVal = pick(s, 'date', 'startDate', 'start_date', 'workDate', 'work_date');
+
+    // start/end 可能為多種命名，且有時候欄位本身就帶完整日期時間
+    const directStart = pick(s, 'startTime', 'start', 'startAt', 'start_at');
+    const directEnd   = pick(s, 'endTime',   'end',   'endAt',   'end_at');
+
+    const startRaw = pick(s, 'startTime', 'start_time', 'start', 'startAt', 'start_at');
+    const endRaw   = pick(s, 'endTime',   'end_time',   'end',   'endAt',   'end_at', 'deadline', 'due', 'dueTime', 'due_time');
+
+    const start = directStart || toLocalIso(dateVal, startRaw) || toLocalIso(null, startRaw) || null;
+    const end   = directEnd   || toLocalIso(dateVal, endRaw)   || toLocalIso(null, endRaw)   || null;
+
+    const stxt  = statusText(pick(s, 'status', 'state'));
 
     out.push({
       type: 'schedule',
-      id: `S-${s.scheduleId}`,
-      title: s.title || (s.deviceName ? `設備：${s.deviceName}` : '工作任務'),
-      desc: s.description || '',
-      deviceId: s.deviceId, // 後端已提供，送申請時需要
-      deviceName: s.deviceName || '',
+      id: `S-${pick(s, 'scheduleId', 'schedule_id', 'id')}`,
+      title: pick(s, 'title') || (pick(s, 'deviceName', 'device_name') ? `設備：${pick(s, 'deviceName', 'device_name')}` : '工作任務'),
+      desc: pick(s, 'description', 'desc') || '',
+      deviceId: pick(s, 'deviceId', 'device_id'),
+      deviceName: pick(s, 'deviceName', 'device_name') || '',
       start, end,
       owner: '自己',
       statusText: stxt,
-      rawStatus: s.status,
+      rawStatus: pick(s, 'status', 'state'),
       returned: stxt === '退回',
-      rejectReason: s.rejectReason || undefined
+      rejectReason: pick(s, 'rejectReason', 'reject_reason', 'managerNote', 'manager_note')
     });
   }
 
+  // issues（如需在員工端顯示）
   for (const i of issues) {
-    const stxt = statusText(i.status || 'assigned');
+    const stxt = statusText(pick(i, 'status', 'state') || 'assigned');
+    const start = toLocalIso(null, pick(i, 'createTime', 'create_time')) ||
+                  toLocalIso(pick(i, 'date', 'issueDate', 'issue_date'), pick(i, 'time', 'issueTime', 'issue_time')) ||
+                  null;
   }
 
+  // 依開始時間排序（無開始時間者置後）
   out.sort((a,b) => {
     if (!a.start && !b.start) return 0;
     if (!a.start) return 1;
@@ -169,20 +227,22 @@ function normalizeTasks(apiData) {
 // FullCalendar v5 事件轉換
 // ==============================
 function toCalendarEvents(arr) {
-  return arr.map(e => {
-    const color = statusStyle(e.rawStatus || e.statusText);
-    return {
-      id: e.id,
-      title: e.title,
-      start: e.start || null,
-      end: e.end || null,
-      display: 'block',
-      backgroundColor: color.bg,
-      borderColor: color.border,
-      textColor: color.text,
-      extendedProps: { raw: e }
-    };
-  });
+  return arr
+    .filter(e => !!e.start) // 沒開始時間的事件不丟日曆
+    .map(e => {
+      const color = statusStyle(e.rawStatus || e.statusText);
+      return {
+        id: e.id,
+        title: e.title,
+        start: e.start,
+        end: e.end || null,
+        display: 'block',
+        backgroundColor: color.bg,
+        borderColor: color.border,
+        textColor: color.text,
+        extendedProps: { raw: e }
+      };
+    });
 }
 
 // ==============================
@@ -210,7 +270,6 @@ function refreshCalendarEvents() {
   }
 }
 
-
 // ==============================
 // UI：列表
 // ==============================
@@ -233,7 +292,6 @@ function renderList(arr) {
     let actionBtns = `<button class="btn btn-info btn-sm btn-task-detail" data-id="${e.id}">詳情</button>`;
     if (e.type === 'schedule') {
       if (e.statusText === '未完成' || e.statusText === '退回') {
-        // 退回也允許直接「接受任務」→ 進入處理中
         actionBtns += ` <button class="btn btn-primary btn-sm btn-accept-task" data-id="${e.id}">接受任務</button>`;
       } else if (e.statusText === '進行中') {
         actionBtns += ` <button class="btn btn-warning btn-sm btn-apply-task" data-id="${e.id}">申請</button>`;
@@ -290,10 +348,7 @@ function updateLocalStatus(id, toText) {
   t.returned = (toText === '退回');
 
   renderList(currentSchedule);
-  if (calendar) {
-    calendar.removeAllEvents();
-    calendar.addEventSource(toCalendarEvents(currentSchedule));
-  }
+  refreshCalendarEvents();
 }
 
 // ==============================
@@ -313,34 +368,39 @@ function ensureCalendar() {
   }
 
   const el = document.getElementById('calendar');
+  if (!el) {
+    console.error('找不到 #calendar 容器');
+    Swal.fire({ icon: 'error', title: '初始化失敗', text: '找不到 #calendar 容器' });
+    return;
+  }
+
   calendar = new FullCalendar.Calendar(el, {
-      initialView: 'dayGridMonth',
-      timeZone: 'local',
-      locale: 'zh-tw',
-      buttonText: { today: '今天', month: '月', week: '週', day: '日', list: '列表' },
-      headerToolbar: { left: 'title', center: '', right: 'today prev,next' },
-      footerToolbar: { left: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek', center: '', right: '' },
-      editable: false,
-      events: (fetchInfo, success) => success(toCalendarEvents(currentSchedule)),
-      eventClick: (info) => {
-        const raw = info.event.extendedProps.raw;
-        if (raw) showTaskDetail(raw);
-      }
-    });
-    calendar.render();
+    initialView: 'dayGridMonth',
+    timeZone: 'local',
+    locale: 'zh-tw',
+    buttonText: { today: '今天', month: '月', week: '週', day: '日', list: '列表' },
+    headerToolbar: { left: 'title', center: '', right: 'today prev,next' },
+    footerToolbar: { left: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek', center: '', right: '' },
+    editable: false,
+    events: (fetchInfo, success) => success(toCalendarEvents(currentSchedule)),
+    eventClick: (info) => {
+      const raw = info.event.extendedProps.raw;
+      if (raw) showTaskDetail(raw);
+    }
+  });
+  calendar.render();
 }
 
 // ==============================
-/** 載入我的任務 */
+// 載入我的任務
 // ==============================
 async function loadMyTasks() {
   const resp = await fetchJSON(API_MY_TASKS);
   currentSchedule = applyVisibilityFilterSchedule(normalizeTasks(resp));
 }
 
-
 // ==============================
-/** 入口 */
+// 入口
 // ==============================
 $(document).ready(async function () {
   try {
@@ -351,10 +411,7 @@ $(document).ready(async function () {
 
   // 初始化日曆
   ensureCalendar();
-  if (calendar) {
-    calendar.removeAllEvents();
-    calendar.addEventSource(toCalendarEvents(currentSchedule));
-  }
+  refreshCalendarEvents();
 
   // 初始化列表
   renderList(currentSchedule);
@@ -365,6 +422,7 @@ $(document).ready(async function () {
     $listViewBtn.removeClass('active');
     $calendarWrap.show();
     $listWrap.hide();
+    refreshCalendarEvents();
     if (calendar) calendar.updateSize(); // 顯示後更新尺寸
   });
 
@@ -385,7 +443,7 @@ $(document).ready(async function () {
 
   // 列表操作：接受任務（PATCH /api/schedule/accept-task/:scheduleId）
   $(document).on('click', '.btn-accept-task', async function () {
-    const eventId = $(this).data('id');          // e.g. "S-12"
+    const eventId = $(this).data('id');            // e.g. "S-12"
     const sid = extractScheduleId(String(eventId)); // 解析出 12
     if (!sid) {
       return Swal.fire({ icon: 'error', title: '無法辨識任務', text: `事件編號 ${eventId} 格式不正確` });
@@ -401,12 +459,9 @@ $(document).ready(async function () {
     if (!ok) return;
 
     try {
-      // 呼叫 accept API
       await fetchJSON(`${API_BASE}/schedule/accept-task/${sid}`, { method: 'PATCH' });
 
-      // 成功後重載並刷新
       await loadMyTasks();
-      currentSchedule = applyVisibilityFilterSchedule(currentSchedule);
       renderList(currentSchedule);
       refreshCalendarEvents();
 
@@ -430,7 +485,7 @@ $(document).ready(async function () {
       return Swal.fire({ icon: 'error', title: '無法辨識任務', text: `事件編號 ${task.id} 格式不正確` });
     }
 
-    // 取得當前時間戳
+    // 取得當前時間戳（顯示用）
     const now = new Date();
     const timestamp = now.toISOString().slice(0, 19).replace('T', ' ');
 
@@ -439,28 +494,28 @@ $(document).ready(async function () {
       html: `
         <div class="form-group text-left">
           <label class="font-weight-bold">1. 基本資訊</label>
-          <input type="text" class="form-control" value="維修任務 - ${task.title}" readonly style="background-color: #f8f9fa; color: #6c757d;">
+          <input type="text" class="form-control" value="維修任務 - ${escapeHtml(task.title)}" readonly style="background-color: #f8f9fa; color: #6c757d;">
           <small class="form-text text-muted">任務基本資訊（不可編輯）</small>
         </div>
-        
+
         <div class="form-group text-left">
           <label class="font-weight-bold">2. 維修描述 <span class="text-danger">*</span></label>
           <textarea id="maintenance-description" class="form-control" rows="4" placeholder="請詳細描述維修過程、發現的問題、解決方案等..."></textarea>
           <small class="form-text text-muted">請詳細描述維修過程和結果</small>
         </div>
-        
+
         <div class="form-group text-left">
           <label class="font-weight-bold">3. 照片</label>
           <input type="text" class="form-control" value="照片" readonly style="background-color: #f8f9fa; color: #6c757d;">
           <small class="form-text text-muted">照片上傳功能（暫未開放）</small>
         </div>
-        
+
         <div class="form-group text-left">
           <label class="font-weight-bold">4. 負責人簽名</label>
           <input type="text" class="form-control" value="負責人簽名" readonly style="background-color: #f8f9fa; color: #6c757d;">
           <small class="form-text text-muted">電子簽名功能（暫未開放）</small>
         </div>
-        
+
         <div class="form-group text-left">
           <label class="font-weight-bold">5. 維修時間紀錄</label>
           <input type="text" class="form-control" value="${timestamp}" readonly style="background-color: #f8f9fa; color: #6c757d;">
@@ -484,7 +539,7 @@ $(document).ready(async function () {
     if (!result.isConfirmed) return;
 
     try {
-      // 呼叫後端：提交維修（寫入 maintenance_records.employee_description 並結束當前維修）
+      // 送給後端的 endTime = 現在（UTC ISO），表示維修完成時間
       await fetchJSON(`${API_BASE}/schedule/maintenance`, {
         method: 'POST',
         body: JSON.stringify({
@@ -495,12 +550,9 @@ $(document).ready(async function () {
         })
       });
 
-      // 成功後重載我的任務並刷新畫面
       await loadMyTasks();
-      currentSchedule = applyVisibilityFilterSchedule(currentSchedule);
       renderList(currentSchedule);
       refreshCalendarEvents();
-
 
       Swal.fire('已送出申請', '維修申請已提交給主管審查', 'success');
     } catch (error) {
@@ -508,7 +560,7 @@ $(document).ready(async function () {
     }
   });
 
-  // 列表操作：重新開始（TODO：接你的實際 API）
+  // 列表操作：重新開始（本地示範；若有 API 請替換）
   $(document).on('click', '.btn-restart-task', async function () {
     const id = $(this).data('id');
     const ok = await Swal.fire({
@@ -520,7 +572,6 @@ $(document).ready(async function () {
     }).then(r => r.isConfirmed);
     if (!ok) return;
 
-    // TODO：改為呼叫後端 API（例：PATCH /api/schedule/restart/:scheduleId）
     updateLocalStatus(id, '未完成');
     Swal.fire('已重新開始', '', 'info');
   });

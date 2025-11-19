@@ -7,6 +7,9 @@ const API_DEVICES_FALLBACK = `${API_BASE}/devices/status`; // 一般使用者可
 const API_WASTE_BY_DEVICE  = (deviceId) => `${API_BASE}/scrap/device/${deviceId}/history?limit=30`;
 const API_MY_SCRAPS        = `${API_BASE}/scrap/my-data`;
 const API_DELETE_SCRAP     = (id) => `${API_BASE}/scrap/${encodeURIComponent(id)}`;
+// ★ 新增：取最新 & 更新 scrap
+const API_SCRAP_LATEST     = (deviceId) => `${API_BASE}/scrap/device/${deviceId}/latest`;
+const API_SCRAP_UPDATE     = (id) => `${API_BASE}/scrap/${id}`;
 const PAGES_BASE =
   window.location.origin.includes(':8080') ? 'http://localhost:3000' : '';
 const WASTE_INPUT_PAGE = (deviceId, scrapId = null) => {
@@ -80,6 +83,63 @@ function escapeHtml(str) {
   return String(str).replace(/[&<>"'`=\/]/g, s => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'
   }[s]));
+}
+
+// ===== 計時器（以 localStorage 暫存每台設備的 start/end） =====
+const TIMER_STORAGE_PREFIX = 'scrap_timer_device_'; // key: scrap_timer_device_{deviceId} -> { startTime, endTime }
+const timerIntervals = new Map(); // deviceId -> setInterval id
+
+function readTimerState(deviceId) {
+  try {
+    const raw = localStorage.getItem(TIMER_STORAGE_PREFIX + String(deviceId));
+    if (!raw) return { startTime: null, endTime: null };
+    const obj = JSON.parse(raw);
+    return { startTime: obj?.startTime || null, endTime: obj?.endTime || null };
+  } catch { return { startTime: null, endTime: null }; }
+}
+function writeTimerState(deviceId, state) {
+  try {
+    localStorage.setItem(TIMER_STORAGE_PREFIX + String(deviceId), JSON.stringify({
+      startTime: state.startTime || null,
+      endTime: state.endTime || null
+    }));
+  } catch {}
+}
+function clearTimerInterval(deviceId) {
+  const t = timerIntervals.get(String(deviceId));
+  if (t) {
+    clearInterval(t);
+    timerIntervals.delete(String(deviceId));
+  }
+}
+function formatDuration(ms) {
+  if (!(ms >= 0)) return '00:00:00';
+  const sec = Math.floor(ms / 1000);
+  const h = String(Math.floor(sec / 3600)).padStart(2, '0');
+  const m = String(Math.floor((sec % 3600) / 60)).padStart(2, '0');
+  const s = String(sec % 60).padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+function updateTimerText(deviceId, $wrap) {
+  const { startTime, endTime } = readTimerState(deviceId);
+  const $txt = $wrap.find('.js-timer-text');
+  const $stop = $wrap.find('.btn-stop-timer');
+  if (!startTime) {
+    $txt.text('00:00:00');
+    $stop.prop('disabled', true);
+    return;
+  }
+  const startMs = Date.parse(startTime);
+  const nowMs = endTime ? Date.parse(endTime) : Date.now();
+  const diff = Math.max(0, nowMs - startMs);
+  $txt.text(formatDuration(diff));
+  $stop.prop('disabled', !!endTime);
+}
+function startTimerDisplay(deviceId, $wrap) {
+  clearTimerInterval(deviceId);
+  updateTimerText(deviceId, $wrap);
+  const id = setInterval(() => updateTimerText(deviceId, $wrap), 1000);
+  timerIntervals.set(String(deviceId), id);
 }
 
 async function ensureChart() {
@@ -163,11 +223,55 @@ function bindUI() {
   elReportSelect?.addEventListener('change', () => renderReportChart(elReportSelect.value));
 
   elCardList?.addEventListener('click', (e) => {
-    const btn = e.target.closest('.btn-fill-input');
-    if (!btn) return;
-    const deviceId = btn.getAttribute('data-device-id');
-    if (!deviceId) return;
-    window.location.href = WASTE_INPUT_PAGE(deviceId);
+    const btnFill = e.target.closest('.btn-fill-input');
+    if (btnFill) {
+      const deviceId = btnFill.getAttribute('data-device-id');
+      if (!deviceId) return;
+      window.location.href = WASTE_INPUT_PAGE(deviceId);
+      return;
+    }
+
+    const btnStop = e.target.closest('.btn-stop-timer');
+    if (btnStop) {
+      (async () => {
+        const deviceId = btnStop.getAttribute('data-device-id');
+        if (!deviceId) return;
+        const st = readTimerState(deviceId);
+        if (!st.startTime) {
+          Swal.fire({ icon: 'info', title: '尚未開始', text: '尚未記錄開始時間。' });
+          return;
+        }
+        try {
+          // 取得該設備最新的 scrap，若存在則更新 end_time
+          const latest = await fetchJSON(API_SCRAP_LATEST(deviceId));
+          const latestData = Array.isArray(latest) ? latest[0] : (latest.data || latest);
+          if (!latestData || !latestData.id) {
+            Swal.fire({ icon: 'warning', title: '目前沒有資料' });
+            return;
+          }
+          if (latestData.end_time || latestData.endTime) {
+            Swal.fire({ icon: 'info', title: '已停止', text: '最新紀錄已包含結束時間。' });
+            return;
+          }
+          const nowIso = new Date().toISOString();
+          await fetchJSON(API_SCRAP_UPDATE(latestData.id), {
+            method: 'PUT',
+            body: JSON.stringify({ end_time: nowIso })
+          });
+          // 同步本地狀態：重置為初始（顯示 00:00:00）
+          writeTimerState(deviceId, { startTime: null, endTime: null });
+          clearTimerInterval(deviceId);
+          const card = btnStop.closest('.card');
+          if (card) {
+            const $wrap = $(card).find(`.js-timer-wrap[data-device-id="${CSS.escape(String(deviceId))}"]`);
+            if ($wrap.length) updateTimerText(deviceId, $wrap);
+          }
+          Swal.fire({ icon: 'success', title: '已停止', timer: 900, showConfirmButton: false });
+        } catch (err) {
+          Swal.fire({ icon: 'error', title: '停止失敗', text: err.message || String(err) });
+        }
+      })();
+    }
   });
 
   // 我的紀錄表格操作
@@ -362,7 +466,19 @@ col.innerHTML = `
         </div>
       </div>
 
-      <div class="d-flex justify-content-end">
+      <div class="mb-2 d-flex align-items-center justify-content-between">
+        <div class="js-timer-wrap d-flex align-items-center" data-device-id="${cardData.deviceId}">
+          <span class="text-muted small mr-2">計時</span>
+          <span class="font-weight-bold js-timer-text">00:00:00</span>
+        </div>
+        <div>
+          <button class="btn btn-sm btn-danger btn-stop-timer" data-device-id="${cardData.deviceId}">
+            <i class="fal fa-stop"></i> 停止
+          </button>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end mt-2">
         <button
           class="btn btn-sm btn-primary btn-fill-input"
           data-device-id="${cardData.deviceId}"
@@ -376,6 +492,18 @@ col.innerHTML = `
 `;
 
       elCardList.appendChild(col);
+
+      // 初始化計時器顯示
+      const $wrap = $(col).find(`.js-timer-wrap[data-device-id="${CSS.escape(String(cardData.deviceId))}"]`);
+      if ($wrap.length) {
+        const st = readTimerState(cardData.deviceId);
+        updateTimerText(cardData.deviceId, $wrap);
+        if (st.startTime && !st.endTime) {
+          startTimerDisplay(cardData.deviceId, $wrap);
+        } else {
+          clearTimerInterval(cardData.deviceId);
+        }
+      }
     }
   }
 

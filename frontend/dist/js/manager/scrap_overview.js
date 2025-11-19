@@ -108,11 +108,11 @@ function bindUI() {
         const resp = await fetchJSON(API_SCRAP_LATEST(id));
         const d = Array.isArray(resp) ? resp[0] : (resp.data || resp);
         Swal.fire({
-          icon: 'info',
-          title: `設備 #${id} 最新入料`,
+          icon: d ? 'info' : 'warning',
+          title: d ? `設備 #${id} 最新入料` : '目前沒有資料',
           html: d
             ? `<div>類型：${d.type}</div><div>重量：${d.weight ?? d.amount ?? 0} kg</div><div>狀態：${d.status}</div>`
-            : '無資料',
+            : '目前沒有資料',
         });
       } catch (err) {
         Swal.fire({ icon: 'error', title: '讀取失敗', text: err.message });

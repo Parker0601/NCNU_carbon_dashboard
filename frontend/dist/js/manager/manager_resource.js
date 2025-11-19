@@ -100,47 +100,69 @@ const DEVICE_STATUS_LABEL = {
     }
   
     function buildDevicePanels(devs) {
-      const panels = [$('#panel-1 .panel-content'), $('#panel-2 .panel-content')];
-  
-      devs.slice(0, 2).forEach((d, idx) => {
-        const $host = panels[idx];
-        if (!$host || !$host.length) return;
-  
+      const $container = $('#device-panels');
+      if (!$container.length) return;
+      $container.empty();
+
+      devs.forEach((d, idx) => {
         const barColor = colorByRatio(d.ratio);
-        $host.html(`
-          <div class="d-flex flex-column align-items-center">
-            <div class="js-easy-pie-chart position-relative d-inline-flex align-items-center justify-content-center"
-                 data-percent="${d.ratio}" data-piesize="250" data-linewidth="20" data-linecap="butt" data-scalelength="7"
-                 data-barcolor="${barColor}">
-              <div class="d-flex flex-column align-items-center">
-                <span class="display-3 font-weight-bold">${d.ratio}%</span>
-                <span class="fs-xl" style="color:${barColor}">
-                  ${d.ratio >= 70 ? '<i class="fal fa-arrow-up"></i> 良好' : (d.ratio >= 40 ? '<i class="fal fa-minus"></i> 待觀察' : '<i class="fal fa-arrow-down"></i> 需改善')}
-                </span>
+        const hdrClass = (function (s) {
+          const k = String(s);
+          if (k === '1') return 'bg-success-700';  // 正常運行
+          if (k === '2') return 'bg-warning-500';  // 維護中
+          if (k === '3') return 'bg-danger-700';   // 故障
+          if (k === '4') return 'bg-info-600';     // 已指派未處理
+          return 'bg-fusion-100';
+        })(d.status);
+        const panelId = `panel-${d.id || (idx + 1)}`;
+        const $col = $(`
+          <div class="col-xl-6">
+            <div id="${panelId}" class="panel">
+              <div class="panel-hdr ${hdrClass}">
+                <h2 class="text-white">
+                  ${escapeHtml(d.name || ('設備 #' + d.id))} <span class="fw-300"><i>轉換效率</i></span>
+                </h2>
+                <div class="panel-toolbar">
+                  <button class="btn btn-panel hover-effect-dot" data-action="panel-collapse" data-toggle="tooltip" title="收合"></button>
+                  <button class="btn btn-panel hover-effect-dot" data-action="panel-fullscreen" data-toggle="tooltip" title="全螢幕"></button>
+                </div>
               </div>
-            </div>
-            <div class="mt-4 w-100">
-              <div class="d-flex justify-content-between mb-2">
-                <span class="text-muted">設備名稱</span>
-                <span class="text-success">${escapeHtml(d.name)}</span>
-              </div>
-              <div class="d-flex justify-content-between mb-2">
-                <span class="text-muted">目前狀態</span>
-                <span class="text-success">${escapeHtml(d.statusZh)}</span>
-              </div>
-              <div class="d-flex justify-content-between mb-2">
-                <span class="text-muted">開機時間</span>
-                <span class="text-success">${escapeHtml((d.bootTime || '').toString().replace('T',' ').slice(0,16))}</span>
-              </div>
-              <div class="d-flex justify-content-between">
-                <span class="text-muted">待處理問題數</span>
-                <span class="text-success">${d.issueCount}</span>
+              <div class="panel-container show">
+                <div class="panel-content">
+                  <div class="d-flex flex-column align-items-center">
+                    <div class="js-easy-pie-chart position-relative d-inline-flex align-items-center justify-content-center"
+                         data-percent="${d.ratio}" data-piesize="250" data-linewidth="20" data-linecap="butt" data-scalelength="7"
+                         data-barcolor="${barColor}" data-toggle="tooltip" title="當前效率">
+                      <div class="d-flex flex-column align-items-center">
+                        <span class="display-3 font-weight-bold">${d.ratio}%</span>
+                        <span class="fs-xl" style="color:${barColor}">
+                          ${d.ratio >= 70 ? '<i class="fal fa-arrow-up"></i> 良好' : (d.ratio >= 40 ? '<i class="fal fa-minus"></i> 待觀察' : '<i class="fal fa-arrow-down"></i> 需改善')}
+                        </span>
+                      </div>
+                    </div>
+                    <div class="mt-4 w-100">
+                      <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">設備名稱</span>
+                        <span class="text-success">${escapeHtml(d.name)}</span>
+                      </div>
+                      <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">目前狀態</span>
+                        <span class="text-success">${escapeHtml(d.statusZh)}</span>
+                      </div>
+                      <div class="d-flex justify-content-between">
+                        <span class="text-muted">運行時間</span>
+                        <span class="text-success">${escapeHtml((d.bootTime || '').toString().replace('T',' ').slice(0,16))}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         `);
+        $container.append($col);
       });
-  
+
       // 啟動 easyPieChart
       $('.js-easy-pie-chart').each(function () {
         const $el = $(this);

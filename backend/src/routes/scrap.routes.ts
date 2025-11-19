@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { scraps } from '@/db/schema';
 import { successResponse, errorResponse, notFoundResponse } from '@/utils/responses';
@@ -105,10 +105,15 @@ router.post('/device/:deviceId', async (req: Request, res: Response) => {
     const validated = createScrapDataSchema.parse(payloadForZod);
 
     // 再把 userId（從登入）補進去以符合資料表必填
-    const toInsert = {
+    const toInsert: any = {
       ...validated,
       userId: Number(req.user.id),
     };
+
+    // ★ 新增：處理 start_time（若提供），否則預設現在
+    const startRaw = (req.body as any)?.start_time ?? (req.body as any)?.startTime;
+    if (startRaw) (toInsert as any).startTime = new Date(startRaw as any);
+    else (toInsert as any).startTime = new Date();
 
     const [created] = await db
       .insert(scraps)
@@ -174,18 +179,50 @@ router.put('/:id', async (req: Request, res: Response) => {
     const id = parseInt(req.params['id'] || '0');
     const validated = updateScrapDataSchema.parse(req.body);
 
-    const [updated] = await db
-      .update(scraps)
-      .set({
-        deviceId: validated.deviceId ?? undefined,
-        type: validated.type ?? undefined,
-        status: validated.status ?? undefined,
-        humidity: validated.humidity ?? undefined,
-        weight: validated.weight ?? undefined,
-        volume: validated.volume ?? undefined,
-      })
-      .where(and(eq(scraps.id, id), eq(scraps.userId, Number(req.user.id))))
-      .returning();
+    // 基本欄位
+    const baseSet: any = {
+      deviceId: validated.deviceId ?? undefined,
+      type: validated.type ?? undefined,
+      status: validated.status ?? undefined,
+      humidity: validated.humidity ?? undefined,
+      weight: validated.weight ?? undefined,
+      volume: validated.volume ?? undefined,
+    };
+
+    // ★ 新增：允許 start_time / end_time（snake_case 與 camelCase 皆接受）
+    const startRaw = (req.body as any)?.start_time ?? (req.body as any)?.startTime;
+    const endRaw   = (req.body as any)?.end_time   ?? (req.body as any)?.endTime;
+    if (startRaw) (baseSet as any).startTime = new Date(startRaw as any);
+    if (endRaw)   (baseSet as any).endTime = new Date(endRaw as any);
+
+    const hasBaseUpdate = Object.values(baseSet).some(v => v !== undefined);
+    let updated: any = null;
+
+    if (hasBaseUpdate) {
+      [updated] = await db
+        .update(scraps)
+        .set(baseSet as any)
+        .where(and(eq(scraps.id, id), eq(scraps.userId, Number(req.user.id))))
+        .returning();
+    }
+
+    // 若僅有時間欄位需要更新（schema 可能尚未加入 startTime/endTime），走原生 SQL 作為後備
+    if (!hasBaseUpdate && (startRaw || endRaw)) {
+      const userId = Number((req as any).user.id);
+      if (startRaw && endRaw) {
+        const q = sql`update "scraps" set "start_time" = ${new Date(startRaw as any)}, "end_time" = ${new Date(endRaw as any)} where ("scraps"."id" = ${id} and "scraps"."user_id" = ${userId}) returning *`;
+        const r: any = await db.execute(q);
+        updated = (r?.rows && r.rows[0]) || null;
+      } else if (startRaw) {
+        const q = sql`update "scraps" set "start_time" = ${new Date(startRaw as any)} where ("scraps"."id" = ${id} and "scraps"."user_id" = ${userId}) returning *`;
+        const r: any = await db.execute(q);
+        updated = (r?.rows && r.rows[0]) || null;
+      } else if (endRaw) {
+        const q = sql`update "scraps" set "end_time" = ${new Date(endRaw as any)} where ("scraps"."id" = ${id} and "scraps"."user_id" = ${userId}) returning *`;
+        const r: any = await db.execute(q);
+        updated = (r?.rows && r.rows[0]) || null;
+      }
+    }
 
     if (!updated) {
       return notFoundResponse(res, 'Scrap data not found or not authorized');
@@ -262,7 +299,8 @@ router.get('/device/:deviceId/history', async (req: Request, res: Response) => {
     const shaped = data.map((r) => ({
       ...r,
       amount: Number(r.weight || 0),
-      date: undefined, // 目前沒有時間欄位，暫時空著
+      // 取用 end_time 或 start_time 作為時間（若需要）
+      // date: (r as any).end_time ?? (r as any).start_time ?? undefined,
     }));
 
     return successResponse(res, shaped, 'Scrap history retrieved successfully');

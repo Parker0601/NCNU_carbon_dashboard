@@ -170,6 +170,20 @@ elBtnSubmit?.addEventListener('click', async () => {
         body: JSON.stringify(payload),
       });
     } else {
+      // ===== 新增模式：記錄開始時間（前端暫存） =====
+      try {
+        const key = 'scrap_timer_device_' + String(deviceId);
+        const nowIso = new Date().toISOString();
+        const raw = localStorage.getItem(key);
+        let obj = null;
+        try { obj = raw ? JSON.parse(raw) : null; } catch {}
+        const next = { startTime: nowIso, endTime: null };
+        localStorage.setItem(key, JSON.stringify(next));
+        // 同步送到後端：建立時夾帶 start_time
+        // @ts-ignore
+        payload.start_time = nowIso;
+      } catch {}
+
       // ===== 新增：POST /scrap/device/:deviceId =====
       res = await fetchJSON(API_WASTE_CREATE(deviceId), {
         method: 'POST',

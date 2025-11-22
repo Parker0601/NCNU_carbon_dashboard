@@ -415,7 +415,8 @@ function renderCards() {
       recentTotal: recentTotal.toFixed(2),
       lastInputAmount: lastAmount.toFixed(2),
       lastInputAt: lastHint,
-      utilPercent
+      utilPercent,
+      canFill: String(dev.status) === '1'
     };
 
     if (hasHbsTpl) {
@@ -483,6 +484,7 @@ col.innerHTML = `
       </div>
 
       <div class="d-flex justify-content-end mt-2">
+        ${cardData.canFill ? `
         <button
           class="btn btn-sm btn-primary btn-fill-input"
           data-device-id="${cardData.deviceId}"
@@ -490,6 +492,7 @@ col.innerHTML = `
         >
           <i class="fal fa-plus mr-1"></i>填寫入料資訊
         </button>
+        ` : ``}
       </div>
     </div>
   </div>

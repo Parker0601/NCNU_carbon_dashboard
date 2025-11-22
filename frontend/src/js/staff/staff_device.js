@@ -361,16 +361,20 @@
   const renderStatusPie = async () => {
     const ctx = ensureReportCanvas();
     const { data: statuses } = await apiFetch(`${API_BASE}/status`, { method: 'GET' });
-    const counts = { '1': 0, '2': 0, '3': 0 };
+    const counts = { '1': 0, '2': 0, '3': 0, '4': 0 };
     (statuses || []).forEach(s => counts[s.status] = (counts[s.status] || 0) + 1);
-    const total = (counts['1'] || 0) + (counts['2'] || 0) + (counts['3'] || 0) || 1;
+    const total = (counts['1'] || 0) + (counts['2'] || 0) + (counts['3'] || 0) + (counts['4'] || 0) || 1;
 
     destroyChartIfAny();
     currentChart = new Chart(ctx, {
       type: 'pie',
       data: {
-        labels: ['正常運行', '維護中', '故障'],
-        datasets: [{ data: [counts['1'] || 0, counts['2'] || 0, counts['3'] || 0], backgroundColor: [COLORS.ok, COLORS.warn, COLORS.err], borderWidth: 1 }]
+        labels: ['正常運行', '維護中', '故障', '已指派未處理'],
+        datasets: [{
+          data: [counts['1'] || 0, counts['2'] || 0, counts['3'] || 0, counts['4'] || 0],
+          backgroundColor: [COLORS.ok, COLORS.warn, COLORS.err, COLORS.blue],
+          borderWidth: 1
+        }]
       },
       options: {
         responsive: true, maintainAspectRatio: false, layout: baseLayout,

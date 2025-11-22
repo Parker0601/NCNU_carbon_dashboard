@@ -48,6 +48,7 @@ function statusToBadge(s) {
   if (str === '1') return { text: '正常運行', cls: 'badge-success' };
   if (str === '2') return { text: '維護中', cls: 'badge-warning' };
   if (str === '3') return { text: '故障', cls: 'badge-danger' };
+  if (str === '4') return { text: '已指派未處理', cls: 'badge-info' };
   return { text: '未知', cls: 'badge-secondary' };
 }
 
@@ -215,8 +216,9 @@ function renderCards() {
   const html = devicesCache
     .map((dev) => {
       const seq = recentMap.get(dev.id) || [];
+      // 狀態顯示應以「設備狀態」為準；若設備狀態缺失再退回最新 scrap 狀態
       const latest = seq[seq.length - 1];
-      const badge = statusToBadge(latest?.status ?? dev.status ?? '1');
+      const badge = statusToBadge(dev.status ?? latest?.status ?? '1');
       return `
         <div class="col-xl-4 col-md-6 mb-3">
           <div class="card shadow-sm h-100">

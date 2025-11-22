@@ -150,10 +150,10 @@
               <span class="font-weight-bold text-dark fs-lg">#${id}</span>
             </div>
             
-            <!-- 啟動時間 -->
+            <!-- 最近啟動時間 -->
             <div class="mb-3">
               <div class="text-muted mb-1">
-                <i class="fal fa-clock mr-1"></i> 啟動時間
+                <i class="fal fa-clock mr-1"></i> 最近啟動時間
               </div>
               <span class="font-weight-normal text-dark fs-md">${fmtDateTime(bootTime)}</span>
             </div>

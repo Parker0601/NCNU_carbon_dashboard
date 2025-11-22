@@ -472,7 +472,7 @@ col.innerHTML = `
 
       <div class="mb-2 d-flex align-items-center justify-content-between">
         <div class="js-timer-wrap d-flex align-items-center" data-device-id="${cardData.deviceId}">
-          <span class="text-muted small mr-2">計時</span>
+          <span class="text-muted small mr-2">運行時長</span>
           <span class="font-weight-bold js-timer-text">00:00:00</span>
         </div>
         <div>

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { scraps } from '@/db/schema';
+import { scraps, devices } from '@/db/schema';
 import { successResponse, errorResponse, notFoundResponse } from '@/utils/responses';
 import { authenticateToken, requireUser } from '@/middleware/auth';
 import { createScrapDataSchema, updateScrapDataSchema } from '../validators/scrap.validator';
@@ -236,6 +236,30 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     if (!updated) {
       return notFoundResponse(res, 'Scrap data not found or not authorized');
+    }
+
+    // ====== 計算效率並更新 devices（依最新這筆 scrap 的 start/end） ======
+    try {
+      const startAt = (updated as any).startTime ? new Date((updated as any).startTime as any) : null;
+      const endAt   = (updated as any).endTime   ? new Date((updated as any).endTime as any)   : null;
+      const deviceIdForUpdate = (updated as any).deviceId;
+      const weightKg = Number((updated as any).weight ?? 0);
+
+      if (deviceIdForUpdate && startAt && endAt && endAt.getTime() > startAt.getTime() && weightKg >= 0) {
+        const hours = (endAt.getTime() - startAt.getTime()) / (1000 * 60 * 60);
+        const tons = weightKg / 1000;
+        const ratio = hours > 0 ? (tons / hours) * 100 : 0; // 1 小時 1 公噸 = 100%
+
+        await db
+          .update(devices)
+          .set({
+            ratio,
+            bootTime: startAt, // 設為最近一次 scrap 的 start_time
+          })
+          .where(eq(devices.id, deviceIdForUpdate));
+      }
+    } catch (_e) {
+      // 靜默失敗：不影響主要回應
     }
 
     return successResponse(res, updated, 'Scrap data updated successfully');

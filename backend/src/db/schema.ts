@@ -40,6 +40,8 @@ export const scraps = pgTable('scraps', {
   humidity: integer('humidity').notNull(),
   weight: integer('weight').notNull(),
   volume: integer('volume').notNull(),
+  startTime: timestamp('start_time'),
+  endTime: timestamp('end_time'),
 });
 
 // issues table

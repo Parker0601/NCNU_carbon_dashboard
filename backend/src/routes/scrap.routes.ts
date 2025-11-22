@@ -8,6 +8,16 @@ import { createScrapDataSchema, updateScrapDataSchema } from '../validators/scra
 
 const router = Router();
 
+// ====== 時間（台灣時區，參考 carbon.routes.ts） ======
+function getTaiwanTimestampForDB(): Date {
+  const now = new Date();
+  return new Date(now.getTime() + 8 * 60 * 60 * 1000);
+}
+function toTaiwanTimestampFromISO(iso: any): Date {
+  const d = new Date(String(iso));
+  return new Date(d.getTime() + 8 * 60 * 60 * 1000);
+}
+
 // All routes require authentication
 router.use(authenticateToken);
 router.use(requireUser);
@@ -110,10 +120,10 @@ router.post('/device/:deviceId', async (req: Request, res: Response) => {
       userId: Number(req.user.id),
     };
 
-    // ★ 新增：處理 start_time（若提供），否則預設現在
+    // ★ 新增：處理 start_time（若提供），否則以台灣時間現在
     const startRaw = (req.body as any)?.start_time ?? (req.body as any)?.startTime;
-    if (startRaw) (toInsert as any).startTime = new Date(startRaw as any);
-    else (toInsert as any).startTime = new Date();
+    if (startRaw) (toInsert as any).startTime = toTaiwanTimestampFromISO(startRaw as any);
+    else (toInsert as any).startTime = getTaiwanTimestampForDB();
 
     const [created] = await db
       .insert(scraps)
@@ -189,11 +199,11 @@ router.put('/:id', async (req: Request, res: Response) => {
       volume: validated.volume ?? undefined,
     };
 
-    // ★ 新增：允許 start_time / end_time（snake_case 與 camelCase 皆接受）
+    // ★ 新增：允許 start_time / end_time（snake_case 與 camelCase 皆接受）並轉台灣時間
     const startRaw = (req.body as any)?.start_time ?? (req.body as any)?.startTime;
     const endRaw   = (req.body as any)?.end_time   ?? (req.body as any)?.endTime;
-    if (startRaw) (baseSet as any).startTime = new Date(startRaw as any);
-    if (endRaw)   (baseSet as any).endTime = new Date(endRaw as any);
+    if (startRaw) (baseSet as any).startTime = toTaiwanTimestampFromISO(startRaw as any);
+    if (endRaw)   (baseSet as any).endTime = toTaiwanTimestampFromISO(endRaw as any);
 
     const hasBaseUpdate = Object.values(baseSet).some(v => v !== undefined);
     let updated: any = null;
@@ -210,15 +220,15 @@ router.put('/:id', async (req: Request, res: Response) => {
     if (!hasBaseUpdate && (startRaw || endRaw)) {
       const userId = Number((req as any).user.id);
       if (startRaw && endRaw) {
-        const q = sql`update "scraps" set "start_time" = ${new Date(startRaw as any)}, "end_time" = ${new Date(endRaw as any)} where ("scraps"."id" = ${id} and "scraps"."user_id" = ${userId}) returning *`;
+        const q = sql`update "scraps" set "start_time" = ${toTaiwanTimestampFromISO(startRaw as any)}, "end_time" = ${toTaiwanTimestampFromISO(endRaw as any)} where ("scraps"."id" = ${id} and "scraps"."user_id" = ${userId}) returning *`;
         const r: any = await db.execute(q);
         updated = (r?.rows && r.rows[0]) || null;
       } else if (startRaw) {
-        const q = sql`update "scraps" set "start_time" = ${new Date(startRaw as any)} where ("scraps"."id" = ${id} and "scraps"."user_id" = ${userId}) returning *`;
+        const q = sql`update "scraps" set "start_time" = ${toTaiwanTimestampFromISO(startRaw as any)} where ("scraps"."id" = ${id} and "scraps"."user_id" = ${userId}) returning *`;
         const r: any = await db.execute(q);
         updated = (r?.rows && r.rows[0]) || null;
       } else if (endRaw) {
-        const q = sql`update "scraps" set "end_time" = ${new Date(endRaw as any)} where ("scraps"."id" = ${id} and "scraps"."user_id" = ${userId}) returning *`;
+        const q = sql`update "scraps" set "end_time" = ${toTaiwanTimestampFromISO(endRaw as any)} where ("scraps"."id" = ${id} and "scraps"."user_id" = ${userId}) returning *`;
         const r: any = await db.execute(q);
         updated = (r?.rows && r.rows[0]) || null;
       }

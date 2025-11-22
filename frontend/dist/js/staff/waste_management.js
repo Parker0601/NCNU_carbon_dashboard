@@ -61,9 +61,13 @@ async function fetchJSON(url, options = {}) {
   try { data = await resp.json(); } catch {}
   
   if (resp.status === 401) {
-    await Swal.fire({ icon: 'warning', title: '請先登入', text: '登入逾時或尚未登入' });
-    window.location.href = '/page_login';
-    throw new Error('Unauthorized');
+    // 不在此自動導向登入，交由呼叫端處理（避免中斷 fallback 或頁面正在導頁時被搶走）
+    const err = new Error('Unauthorized');
+    // @ts-ignore
+    err.status = 401;
+    // @ts-ignore
+    err.body = data;
+    throw err;
   }
   
   if (!resp.ok || (data && data.success === false)) {

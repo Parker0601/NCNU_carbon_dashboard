@@ -181,6 +181,27 @@ let devicesCache = [];     // [{ id, name, code, status }, ...]
 let recentMap = new Map(); // deviceId -> [{id, amount, type}, ...]
 let chartRef = null;
 const scrapCache = {};     // 我的紀錄快取
+const PRIMARY_DEVICE_ROLES = new Set(['boss', 'manager']);
+let primaryDeviceAllowed = true;
+
+function getCurrentUserRole() {
+  try {
+    if (window.CURRENT_USER?.role) return String(window.CURRENT_USER.role).toLowerCase();
+    const storedRole =
+      localStorage.getItem('userRole') ||
+      localStorage.getItem('currentRole');
+    return storedRole ? String(storedRole).toLowerCase() : '';
+  } catch {
+    return '';
+  }
+}
+
+function canUsePrimaryDeviceApi() {
+  if (!primaryDeviceAllowed) return false;
+  const role = getCurrentUserRole();
+  if (!role) return true; // 若無法判斷角色，沿用原流程以免阻擋真正有權限的人
+  return PRIMARY_DEVICE_ROLES.has(role);
+}
 
 // ====================================================
 // 初始化
@@ -329,22 +350,25 @@ async function loadDevices(force = false) {
   if (!force && devicesCache.length) return;
 
   // 先嘗試管理員專用的完整列表
-  try {
-    const resp = await fetchJSON(API_DEVICES_PRIMARY);
-    const arr = Array.isArray(resp) ? resp : (resp.data || []);
-    devicesCache = arr.map(d => ({
-      id: d.id,
-      name: d.name,
-      status: String(d.status),
-      code: d.code || d.sn || undefined,
-      bootTime: d.bootTime,
-      ratio: d.ratio
-    }));
-    return;
-  } catch (e) {
-    // 若被權限擋下（401/403），再用 fallback
-    if (!(e && e.status && (e.status === 401 || e.status === 403))) {
-      throw e;
+  if (canUsePrimaryDeviceApi()) {
+    try {
+      const resp = await fetchJSON(API_DEVICES_PRIMARY);
+      const arr = Array.isArray(resp) ? resp : (resp.data || []);
+      devicesCache = arr.map(d => ({
+        id: d.id,
+        name: d.name,
+        status: String(d.status),
+        code: d.code || d.sn || undefined,
+        bootTime: d.bootTime,
+        ratio: d.ratio
+      }));
+      return;
+    } catch (e) {
+      if (e && e.status && (e.status === 401 || e.status === 403)) {
+        primaryDeviceAllowed = false;
+      } else {
+        throw e;
+      }
     }
   }
 

@@ -151,7 +151,14 @@
           </div>
         </div>
         <div class="progress mb-3" style="height:8px;">
-          <div class="progress-bar" role="progressbar" style="width: {{utilPercent}}%;" aria-valuenow="{{utilPercent}}" aria-valuemin="0" aria-valuemax="100"></div>
+          <div 
+            class="progress-bar" 
+            role="progressbar" 
+            style="width: {{#if utilPercent}}{{utilPercent}}{{else}}0{{/if}}%;" 
+            aria-valuenow="{{#if utilPercent}}{{utilPercent}}{{else}}0{{/if}}" 
+            aria-valuemin="0" 
+            aria-valuemax="100"
+          ></div>
         </div>
         <div class="d-flex justify-content-end">
           {{#if canFill}}
